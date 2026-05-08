@@ -7,7 +7,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Peer } from 'peerjs';
 
-const socket = io(import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000');
+const socket = io(import.meta.env.VITE_BACKEND_URL);
 
 export default function CodeReview() {
   const { id } = useParams();
@@ -237,7 +237,7 @@ export default function CodeReview() {
 
   const statusColor = review.status === 'approved' ? 'bg-green-600'
     : review.status === 'changes_requested' ? 'bg-red-600'
-    : review.status === 'merged' ? 'bg-purple-600' : 'bg-blue-600';
+      : review.status === 'merged' ? 'bg-purple-600' : 'bg-blue-600';
 
   return (
     <div className="flex h-screen bg-gray-900 text-white overflow-hidden">
@@ -338,20 +338,19 @@ export default function CodeReview() {
         <div className="flex border-b border-gray-700 shrink-0">
           {[
             { key: 'comments', label: '📝 Comments' },
-            { key: 'chat',     label: unreadChat > 0 ? `💬 Chat (${unreadChat})` : '💬 Chat' },
-            { key: 'ai',       label: '✨ AI Insights' },
-            { key: 'voice',    label: '🎧 Voice' },
+            { key: 'chat', label: unreadChat > 0 ? `💬 Chat (${unreadChat})` : '💬 Chat' },
+            { key: 'ai', label: '✨ AI Insights' },
+            { key: 'voice', label: '🎧 Voice' },
           ].map(({ key, label }) => (
             <button
               key={key}
               onClick={() => { setActiveTab(key); if (key === 'chat') setUnreadChat(0); }}
-              className={`flex-1 py-2.5 text-[11px] font-semibold transition whitespace-nowrap px-1 ${
-                activeTab === key
+              className={`flex-1 py-2.5 text-[11px] font-semibold transition whitespace-nowrap px-1 ${activeTab === key
                   ? 'border-b-2 border-blue-400 text-blue-400 bg-gray-800'
                   : unreadChat > 0 && key === 'chat'
-                  ? 'text-yellow-400 animate-pulse'
-                  : 'text-gray-500 hover:text-gray-300'
-              }`}
+                    ? 'text-yellow-400 animate-pulse'
+                    : 'text-gray-500 hover:text-gray-300'
+                }`}
             >
               {label}
             </button>
@@ -418,24 +417,22 @@ export default function CodeReview() {
               {chatMessages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full gap-3 text-center pt-8">
                   <span className="text-4xl">💬</span>
-                  <p className="text-gray-500 text-sm">No messages yet.<br/>Start chatting with your collaborators!</p>
+                  <p className="text-gray-500 text-sm">No messages yet.<br />Start chatting with your collaborators!</p>
                 </div>
               ) : (
                 chatMessages.map((msg, i) => (
                   <div key={i} className={`flex ${msg.isMe ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[80%] rounded-2xl px-3 py-2 ${
-                      msg.isMe
+                    <div className={`max-w-[80%] rounded-2xl px-3 py-2 ${msg.isMe
                         ? 'bg-blue-600 text-white rounded-br-sm'
                         : 'bg-gray-700 text-gray-100 rounded-bl-sm'
-                    }`}>
+                      }`}>
                       {!msg.isMe && (
                         <div className="flex items-center gap-1 mb-0.5">
                           <span className="text-[10px] font-semibold text-blue-300">{msg.sender}</span>
-                          <span className={`text-[9px] px-1 rounded ${
-                            msg.role === 'admin' ? 'bg-red-700/50 text-red-300' :
-                            msg.role === 'reviewer' ? 'bg-green-700/50 text-green-300' :
-                            'bg-gray-600 text-gray-400'
-                          }`}>{msg.role}</span>
+                          <span className={`text-[9px] px-1 rounded ${msg.role === 'admin' ? 'bg-red-700/50 text-red-300' :
+                              msg.role === 'reviewer' ? 'bg-green-700/50 text-green-300' :
+                                'bg-gray-600 text-gray-400'
+                            }`}>{msg.role}</span>
                         </div>
                       )}
                       <p className="text-sm leading-snug">{msg.text}</p>
