@@ -9,10 +9,16 @@ require('dotenv').config();
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: { origin: '*', methods: ['GET', 'POST'] }
+  cors: {
+  origin: "devcollab-coral.vercel.app",
+  methods: ["GET", "POST"]
+}
 });
 
-app.use(cors());
+app.use(cors({
+  origin: "devcollab-coral.vercel.app",
+  credentials: true
+}));
 app.use(express.json());
 
 // Routes
