@@ -1,4 +1,3 @@
-// backend/routes/reviews.js
 const router = require('express').Router();
 const auth = require('../middleware/auth');
 const authorize = require('../middleware/role');
@@ -6,7 +5,6 @@ const Review = require('../models/Review');
 const User = require('../models/User');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
-// Create review
 router.post('/', auth, authorize(['developer']), async (req, res) => {
   try {
     const review = await Review.create({ ...req.body, owner: req.user._id });
@@ -16,7 +14,6 @@ router.post('/', auth, authorize(['developer']), async (req, res) => {
   }
 });
 
-// Get all reviews
 router.get('/', auth, async (req, res) => {
   let query = {};
   if (req.user.role === 'developer') {
@@ -28,7 +25,6 @@ router.get('/', auth, async (req, res) => {
   res.json(reviews);
 });
 
-// Get single review
 router.get('/:id', auth, async (req, res) => {
   const review = await Review.findById(req.params.id)
     .populate('owner', 'name email')
@@ -37,7 +33,6 @@ router.get('/:id', auth, async (req, res) => {
   res.json(review);
 });
 
-// Add comment
 router.post('/:id/comments', auth, async (req, res) => {
   const review = await Review.findById(req.params.id);
   review.comments.push({ ...req.body, author: req.user._id });
@@ -46,7 +41,6 @@ router.post('/:id/comments', auth, async (req, res) => {
   res.json(updated.comments[updated.comments.length - 1]);
 });
 
-// AI Review Generation
 router.post('/:id/ai-review', auth, authorize(['reviewer', 'admin']), async (req, res) => {
   try {
     const review = await Review.findById(req.params.id);
@@ -125,7 +119,6 @@ ${review.code}
   }
 });
 
-// Update status
 router.patch('/:id/status', auth, authorize(['developer', 'reviewer', 'admin']), async (req, res) => {
   const review = await Review.findByIdAndUpdate(
     req.params.id, { status: req.body.status }, { new: true }
@@ -133,7 +126,6 @@ router.patch('/:id/status', auth, authorize(['developer', 'reviewer', 'admin']),
   res.json(review);
 });
 
-// Update code
 router.patch('/:id/code', auth, authorize(['developer', 'reviewer', 'admin']), async (req, res) => {
   const updateData = { modifiedCode: req.body.modifiedCode };
   if (req.body.code) updateData.code = req.body.code;
@@ -143,7 +135,6 @@ router.patch('/:id/code', auth, authorize(['developer', 'reviewer', 'admin']), a
   res.json(review);
 });
 
-// Delete review
 router.delete('/:id', auth, authorize(['admin']), async (req, res) => {
   await Review.findByIdAndDelete(req.params.id);
   res.json({ message: 'Review deleted successfully' });

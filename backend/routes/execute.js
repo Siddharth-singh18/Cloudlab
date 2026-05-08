@@ -27,7 +27,6 @@ router.post('/', auth, (req, res) => {
     const filePath = path.join(os.tmpdir(), `temp_${id}${ext}`);
     fs.writeFileSync(filePath, code);
 
-    // Run the code with a timeout of 5 seconds to prevent infinite loops
     exec(`${command} ${filePath}`, { timeout: 5000 }, (error, stdout, stderr) => {
       // Clean up
       if (fs.existsSync(filePath)) {

@@ -1,4 +1,3 @@
-// backend/server.js
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -22,12 +21,10 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/reviews', require('./routes/reviews'));
 app.use('/api/execute', require('./routes/execute'));
 
-// Socket.io
 io.on('connection', (socket) => {
   socket.on('join-review', (reviewId) => {
     socket.join(reviewId);
