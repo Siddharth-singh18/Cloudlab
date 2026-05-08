@@ -14,7 +14,7 @@ export function AuthProvider({ children }) {
   );
 
   // Base URL + Auth header set karo
-  axios.defaults.baseURL = 'http://localhost:5000';
+  axios.defaults.baseURL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
   axios.defaults.headers.common['Authorization'] = token ? `Bearer ${token}` : '';
 
   const login = async (email, password) => {
