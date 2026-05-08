@@ -10,13 +10,14 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-  origin: "devcollab-coral.vercel.app",
-  methods: ["GET", "POST"]
-}
+    origin: ["https://devcollab-coral.vercel.app", "http://localhost:5173"],
+    methods: ["GET", "POST"],
+    credentials: true
+  }
 });
 
 app.use(cors({
-  origin: "devcollab-coral.vercel.app",
+  origin: ["https://devcollab-coral.vercel.app", "http://localhost:5173"],
   credentials: true
 }));
 app.use(express.json());
