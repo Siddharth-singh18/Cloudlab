@@ -1,0 +1,487 @@
+import React, { useEffect, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { X, Maximize2, Minimize2, Plus, RotateCcw, Eraser, Square, Copy } from 'lucide-react'
+import { useStore } from '../../store'
+import { getSocket } from '../../lib/socket'
+import 'xterm/css/xterm.css'
+
+function useXterm(
+  containerRef: React.RefObject<HTMLDivElement | null>,
+  active: boolean,
+  projectId?: string
+) {
+  const termRef = useRef<import('xterm').Terminal | null>(null)
+  const fitRef  = useRef<import('xterm-addon-fit').FitAddon | null>(null)
+  const [sessionProjectId, setSessionProjectId] = useState<string | null>(null)
+  const [isReady, setIsReady] = useState(false)
+
+  useEffect(() => {
+    if (!active || !containerRef.current) return
+
+    let mounted = true
+    let resizeObserver: ResizeObserver | null = null
+    let socketCleanup: (() => void) | null = null
+
+    ;(async () => {
+      const [{ Terminal }, { FitAddon }, { WebLinksAddon }] = await Promise.all([
+        import('xterm'),
+        import('xterm-addon-fit'),
+        import('xterm-addon-web-links'),
+      ])
+
+      if (!mounted || !containerRef.current) return
+      setSessionProjectId(null)
+      setIsReady(false)
+
+      const term = new Terminal({
+        cursorBlink: true,
+        fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+        fontSize: 12,
+        lineHeight: 1.5,
+        theme: {
+          background: '#0d1117',
+          foreground: '#e6edf3',
+          cursor: '#58a6ff',
+          cursorAccent: '#0d1117',
+          selectionBackground: '#264f78',
+          black: '#0d1117',
+          red: '#f85149',
+          green: '#3fb950',
+          yellow: '#d29922',
+          blue: '#58a6ff',
+          magenta: '#bc8cff',
+          cyan: '#76e3ea',
+          white: '#e6edf3',
+          brightBlack: '#6e7681',
+          brightRed: '#ff7b72',
+          brightGreen: '#56d364',
+          brightYellow: '#e3b341',
+          brightBlue: '#79c0ff',
+          brightMagenta: '#d2a8ff',
+          brightCyan: '#87deea',
+          brightWhite: '#ffffff',
+        },
+        allowTransparency: true,
+        scrollback: 1000,
+      })
+
+      const fit = new FitAddon()
+      const links = new WebLinksAddon()
+      term.loadAddon(fit)
+      term.loadAddon(links)
+      term.open(containerRef.current)
+      requestAnimationFrame(() => fit.fit())
+      term.focus()
+      termRef.current = term
+      fitRef.current = fit
+
+      const socket = getSocket()
+      const onData = (data: string) => {
+        if (mounted) term.write(data)
+      }
+      const onReady = ({ projectId: readyProjectId }: { projectId: string }) => {
+        if (mounted) {
+          setSessionProjectId(readyProjectId)
+          setIsReady(true)
+          requestAnimationFrame(() => fit.fit())
+        }
+      }
+      const ensureTerminal = (force = false) => {
+        if (!projectId) {
+          term.write('\r\n\x1b[33mOpen a project to start a terminal session.\x1b[0m\r\n')
+          return
+        }
+        setSessionProjectId(null)
+        setIsReady(false)
+        socket.emit('terminal:create', { projectId, force })
+        socket.emit('terminal:resize', { cols: term.cols, rows: term.rows })
+      }
+
+      socket.on('terminal:data', onData)
+      socket.on('terminal:ready', onReady)
+      socket.on('connect', ensureTerminal)
+
+      if (socket.connected) {
+        ensureTerminal()
+      } else {
+        term.write('\r\n\x1b[33mConnecting terminal…\x1b[0m\r\n')
+      }
+
+      term.onData((data) => {
+        socket.emit('terminal:input', data)
+      })
+
+      // Handle copy with Ctrl+Shift+C
+      term.element?.addEventListener('keydown', (e: KeyboardEvent) => {
+        if (e.ctrlKey && e.shiftKey && e.key === 'C') {
+          const selection = term.getSelection()
+          if (selection) {
+            navigator.clipboard.writeText(selection)
+            e.preventDefault()
+            e.stopPropagation()
+          }
+        }
+      })
+
+      resizeObserver = new ResizeObserver(() => {
+        fit.fit()
+        socket.emit('terminal:resize', { cols: term.cols, rows: term.rows })
+      })
+      resizeObserver.observe(containerRef.current!)
+
+      socketCleanup = () => {
+        socket.off('terminal:data', onData)
+        socket.off('terminal:ready', onReady)
+        socket.off('connect', ensureTerminal)
+      }
+    })()
+
+    return () => {
+      mounted = false
+      setSessionProjectId(null)
+      setIsReady(false)
+      resizeObserver?.disconnect()
+      socketCleanup?.()
+      termRef.current?.dispose()
+      termRef.current = null
+    }
+  }, [active, containerRef, projectId])
+
+  return { termRef, fitRef, sessionProjectId, isReady }
+}
+
+export function TerminalPanel() {
+  const { bottomPanelTab, setBottomPanelTab, bottomPanelOpen, setBottomPanelOpen,
+          buildResult, buildStatus, currentProject,
+          pendingTerminalRun, clearPendingTerminalRun } = useStore()
+  const queryClient = useQueryClient()
+  const [terminalHeight, setTerminalHeight] = useState(200)
+  const [maximised, setMaximised] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  const { termRef, fitRef, sessionProjectId, isReady } = useXterm(containerRef, bottomPanelOpen, currentProject?.id)
+
+  useEffect(() => {
+    if (!bottomPanelOpen || bottomPanelTab !== 'terminal') return
+    const timer = window.setTimeout(() => {
+      fitRef.current?.fit()
+      const socket = getSocket()
+      if (termRef.current) {
+        socket.emit('terminal:resize', {
+          cols: termRef.current.cols,
+          rows: termRef.current.rows,
+        })
+      }
+    }, 80)
+    return () => window.clearTimeout(timer)
+  }, [bottomPanelOpen, bottomPanelTab, maximised, terminalHeight, fitRef, termRef])
+
+  useEffect(() => {
+    if (!currentProject?.id) return
+    const socket = getSocket()
+    let refreshTimer: number | null = null
+
+    const scheduleRefresh = () => {
+      if (refreshTimer) window.clearTimeout(refreshTimer)
+      refreshTimer = window.setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ['fileTree', currentProject.id] })
+      }, 1200)
+    }
+
+    socket.on('terminal:data', scheduleRefresh)
+    return () => {
+      socket.off('terminal:data', scheduleRefresh)
+      if (refreshTimer) window.clearTimeout(refreshTimer)
+    }
+  }, [currentProject?.id, queryClient])
+
+  useEffect(() => {
+    if (!pendingTerminalRun || !currentProject?.id) return
+    if (!bottomPanelOpen) return
+    if (pendingTerminalRun.projectId !== currentProject.id) return
+
+    const socket = getSocket()
+    
+    // Create terminal if not exists or not for this project
+    if (sessionProjectId !== currentProject.id) {
+      // Listen for ready event once
+      const onReady = () => {
+        socket.emit('terminal:run', {
+          projectId: pendingTerminalRun.projectId,
+          command: pendingTerminalRun.command,
+        })
+        clearPendingTerminalRun()
+      }
+      
+      socket.emit('terminal:create', { projectId: currentProject.id, force: true })
+      
+      // Set up one-time listener for ready
+      const onReadyWrapper = ({ projectId }: { projectId: string }) => {
+        if (projectId === currentProject.id) {
+          socket.off('terminal:ready', onReadyWrapper)
+          onReady()
+        }
+      }
+      
+      const onReadyWrapper2 = onReadyWrapper
+      socket.on('terminal:ready', onReadyWrapper2)
+      
+      // Timeout fallback - just try to run anyway after 2 seconds
+      const timeoutId = window.setTimeout(() => {
+        socket.off('terminal:ready', onReadyWrapper2)
+        socket.emit('terminal:run', {
+          projectId: pendingTerminalRun.projectId,
+          command: pendingTerminalRun.command,
+        })
+        clearPendingTerminalRun()
+      }, 2000)
+      
+      return () => {
+        socket.off('terminal:ready', onReadyWrapper2)
+        window.clearTimeout(timeoutId)
+      }
+    }
+
+    // Terminal is ready, run command immediately
+    const timer = window.setTimeout(() => {
+      socket.emit('terminal:run', {
+        projectId: pendingTerminalRun.projectId,
+        command: pendingTerminalRun.command,
+      })
+      clearPendingTerminalRun()
+    }, 50)
+
+    return () => window.clearTimeout(timer)
+  }, [
+    pendingTerminalRun,
+    currentProject?.id,
+    sessionProjectId,
+    bottomPanelOpen,
+    clearPendingTerminalRun,
+  ])
+
+  const reconnectTerminal = () => {
+    if (!currentProject?.id) return
+    setBottomPanelTab('terminal')
+    setBottomPanelOpen(true)
+    getSocket().emit('terminal:create', { projectId: currentProject.id, force: true })
+  }
+
+  const clearTerminal = () => {
+    termRef.current?.clear()
+    termRef.current?.write('\x1b[2J\x1b[H')
+  }
+
+  const copySelection = () => {
+    const selection = termRef.current?.getSelection()
+    if (selection) {
+      navigator.clipboard.writeText(selection)
+    }
+  }
+
+  const interruptTerminal = () => {
+    getSocket().emit('terminal:input', '\u0003')
+  }
+
+  const height = maximised ? 480 : terminalHeight
+
+  const TABS = [
+    { id: 'terminal', label: 'Terminal' },
+    { id: 'output',   label: 'Output' },
+    { id: 'build',    label: 'Build' },
+    { id: 'problems', label: `Problems${buildResult?.warnings.length ? ` (${buildResult.warnings.length})` : ''}` },
+  ] as const
+
+  return (
+    <div
+      className="flex flex-col bg-editor-bg border-t border-editor-border shrink-0 overflow-hidden relative"
+      style={{ height }}
+    >
+      {/* Resize handle moved to the TOP */}
+      <div
+        className="absolute top-0 left-0 w-full h-1 cursor-ns-resize bg-transparent hover:bg-editor-accent/30 transition-colors shrink-0 z-20"
+        onMouseDown={(e) => {
+          const startY = e.clientY
+          const startH = terminalHeight
+          const onMove = (ev: MouseEvent) => {
+            const delta = startY - ev.clientY
+            setTerminalHeight(Math.min(600, Math.max(100, startH + delta)))
+          }
+          const onUp = () => {
+            window.removeEventListener('mousemove', onMove)
+            window.removeEventListener('mouseup', onUp)
+          }
+          window.addEventListener('mousemove', onMove)
+          window.addEventListener('mouseup', onUp)
+        }}
+      />
+
+      {/* Tab bar */}
+      <div className="flex items-center bg-editor-surface border-b border-editor-border shrink-0">
+        {TABS.map(({ id, label }) => (
+          <button
+            key={id}
+            onClick={() => setBottomPanelTab(id)}
+            className={`px-3 py-1.5 text-[11px] border-b-2 transition-colors ${
+              bottomPanelTab === id
+                ? 'border-editor-text text-editor-text'
+                : 'border-transparent text-editor-muted hover:text-editor-text'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+
+        <div className="flex-1" />
+
+        {/* Build status chip */}
+        <div className={`flex items-center gap-1 mr-2 text-[10px] px-2 py-0.5 rounded-full ${
+          buildStatus === 'success' ? 'bg-green-400/10 text-green-400'
+          : buildStatus === 'failed' ? 'bg-red-400/10 text-red-400'
+          : buildStatus === 'running' ? 'bg-yellow-400/10 text-yellow-400'
+          : 'bg-editor-border/30 text-editor-muted'
+        }`}>
+          <span className={`w-1.5 h-1.5 rounded-full ${
+            buildStatus === 'success' ? 'bg-green-400'
+            : buildStatus === 'failed' ? 'bg-red-400'
+            : buildStatus === 'running' ? 'bg-yellow-400 animate-pulse_dot'
+            : 'bg-editor-muted'
+          }`} />
+          {buildStatus === 'success' ? 'Build passed'
+           : buildStatus === 'failed' ? 'Build failed'
+           : buildStatus === 'running' ? 'Building…'
+           : 'Idle'}
+        </div>
+
+        <div className="hidden md:flex items-center gap-1 mr-2 text-[10px] text-editor-muted">
+          <span className={`w-1.5 h-1.5 rounded-full ${isReady ? 'bg-green-400' : 'bg-yellow-400 animate-pulse_dot'}`} />
+          {currentProject?.name ? (
+            <span>{isReady ? `Attached · ${currentProject.name}` : `Connecting · ${currentProject.name}`}</span>
+          ) : (
+            <span>No project</span>
+          )}
+        </div>
+
+        <button
+          onClick={interruptTerminal}
+          className="sidebar-icon w-6 h-6 mr-1"
+          title="Send Ctrl+C"
+          disabled={!currentProject?.id}
+        >
+          <Square size={11} />
+        </button>
+        <button
+          onClick={clearTerminal}
+          className="sidebar-icon w-6 h-6 mr-1"
+          title="Clear terminal"
+        >
+          <Eraser size={12} />
+        </button>
+        <button
+          onClick={copySelection}
+          className="sidebar-icon w-6 h-6 mr-1"
+          title="Copy selection (Ctrl+Shift+C)"
+        >
+          <Copy size={12} />
+        </button>
+        <button
+          onClick={reconnectTerminal}
+          className="sidebar-icon w-6 h-6 mr-1"
+          title="Reconnect terminal"
+          disabled={!currentProject?.id}
+        >
+          <RotateCcw size={12} />
+        </button>
+        <button
+          onClick={() => {
+            setBottomPanelTab('terminal')
+            setBottomPanelOpen(true)
+            if (currentProject?.id) {
+              getSocket().emit('terminal:create', { projectId: currentProject.id, force: true })
+            }
+          }}
+          className="sidebar-icon w-6 h-6 mr-1"
+          title="New terminal session"
+        >
+          <Plus size={12} />
+        </button>
+        <button
+          onClick={() => setMaximised(!maximised)}
+          className="sidebar-icon w-6 h-6 mr-1"
+          title={maximised ? 'Restore' : 'Maximise'}
+        >
+          {maximised ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
+        </button>
+        <button
+          onClick={() => setBottomPanelOpen(false)}
+          className="sidebar-icon w-6 h-6 mr-1"
+          title="Close panel"
+        >
+          <X size={12} />
+        </button>
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-hidden pt-1">
+        {/* Terminal */}
+        <div
+          ref={containerRef}
+          className="w-full h-full"
+          style={{ visibility: bottomPanelTab === 'terminal' ? 'visible' : 'hidden' }}
+        />
+
+        {/* Output */}
+        {bottomPanelTab === 'output' && (
+          <div className="p-3 font-mono text-[11px] overflow-y-auto h-full space-y-0.5">
+            <p className="text-green-400">▶  VITE v5.4.2 ready in 312ms</p>
+            <p className="text-editor-muted">  Local:   http://localhost:5173/</p>
+            <p className="text-editor-muted">  Network: http://192.168.1.12:5173/</p>
+            <p className="text-yellow-400 mt-1">⚠ TypeScript: 2 warnings in AuthProvider.tsx</p>
+          </div>
+        )}
+
+        {/* Build */}
+        {bottomPanelTab === 'build' && (
+          <div className="p-3 font-mono text-[11px] overflow-y-auto h-full space-y-0.5">
+            <p className="text-green-400">✓ 284 modules transformed</p>
+            <p className="text-editor-muted">dist/index.html          0.46 kB</p>
+            <p className="text-editor-muted">dist/assets/index.js   142.8 kB │ gzip: 46.2 kB</p>
+            <p className="text-green-400 mt-1">✓ built in {buildResult?.duration ?? 3420}ms</p>
+            {buildResult && (
+              <div className="mt-2 border-t border-editor-border pt-2">
+                <p className="text-[10px] text-editor-muted">
+                  Duration: {buildResult.duration}ms · {new Date(buildResult.timestamp).toLocaleTimeString()}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Problems */}
+        {bottomPanelTab === 'problems' && (
+          <div className="p-3 overflow-y-auto h-full">
+            {buildResult?.warnings.map((w, i) => (
+              <div
+                key={i}
+                className="flex items-start gap-2 py-1.5 border-b border-editor-border/30 text-[11px] group hover:bg-white/5 rounded px-1"
+              >
+                <span className="text-yellow-400 shrink-0 mt-0.5">⚠</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-editor-text">{w.message}</p>
+                  <p className="text-[10px] font-mono text-editor-muted mt-0.5">
+                    {w.file}:{w.line}
+                  </p>
+                </div>
+              </div>
+            ))}
+            {(!buildResult || buildResult.warnings.length === 0) && (
+              <p className="text-[11px] text-editor-muted text-center py-6">
+                No problems detected ✓
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}

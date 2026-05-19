@@ -1,0 +1,91 @@
+services:
+  # ─── PostgreSQL ─────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: devforge
+      POSTGRES_PASSWORD: devforge
+      POSTGRES_DB: devforge
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - '5434:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U devforge']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ─── Redis ──────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - '6380:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ─── Server ─────────────────────────────────────────────────────────────────
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: postgresql://devforge:devforge@postgres:5432/devforge
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-prod}
+      STORAGE_TYPE: local
+      STORAGE_LOCAL_PATH: /app/storage/projects
+      DOCKER_SOCKET: /var/run/docker.sock
+      CLIENT_URL: http://localhost
+    volumes:
+      - project_storage:/app/storage/projects
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - '3001:3001'
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://localhost:3001/api/health']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── Client (built static files served by Nginx) ────────────────────────────
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - '5173:80'
+
+  # ─── Nginx reverse proxy ────────────────────────────────────────────────────
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    depends_on:
+      - server
+      - client
+    ports:
+      - '80:80'
+    volumes:
+      - ./docker/nginx.conf:/etc/nginx/nginx.conf:ro
+
+volumes:
+  postgres_data:
+  redis_data:
+  project_storage:
