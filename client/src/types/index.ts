@@ -244,8 +244,8 @@ export interface ServerToClientEvents {
   'build:status': (result: BuildResult) => void
   'activity:event': (event: ActivityEvent) => void
   'chat:message': (message: ChatMessage) => void
-  'terminal:data': (data: string) => void
-  'terminal:ready': (payload: { projectId: string }) => void
+  'terminal:data': (payload: { terminalId: string; data: string }) => void
+  'terminal:ready': (payload: { projectId: string; terminalId: string }) => void
   'file:saved': (payload: { path: string; savedBy: string }) => void
   'yjs:sync_reply': (payload: { update: number[] }) => void
   'yjs:update': (payload: { update: number[]; filePath: string }) => void
@@ -255,10 +255,10 @@ export interface ClientToServerEvents {
   'room:join': (roomId: string) => void
   'room:leave': (roomId: string) => void
   'presence:update': (presence: Partial<Presence>) => void
-  'terminal:create': (payload: { projectId: string; force?: boolean }) => void
-  'terminal:input': (data: string) => void
-  'terminal:resize': (payload: { cols: number; rows: number }) => void
-  'terminal:run': (payload: { projectId: string; command: string }) => void
+  'terminal:create': (payload: { projectId: string; terminalId: string; force?: boolean }) => void
+  'terminal:input': (payload: { terminalId: string; data: string }) => void
+  'terminal:resize': (payload: { terminalId: string; cols: number; rows: number }) => void
+  'terminal:run': (payload: { projectId: string; terminalId: string; command: string }) => void
   'build:trigger': (projectId: string) => void
   'chat:send': (payload: { roomId: string; body: string }) => void
 }

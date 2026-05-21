@@ -11,7 +11,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret'
 // Map: roomId -> Map<userId, presenceData>
 const roomPresences = new Map<string, Map<string, any>>()
 
-// Map: socketId -> pty process
+// Map: socketId:terminalId -> pty process
 const terminals = new Map<string, ReturnType<typeof pty.spawn>>()
 const terminalProjects = new Map<string, string>()
 const nodeBinDir = path.dirname(process.execPath)
@@ -95,28 +95,29 @@ export function registerSocketHandlers(io: Server) {
     })
 
     // ── Terminal ────────────────────────────────────────────────────────────
-    socket.on('terminal:create', async (payload: string | { projectId: string; force?: boolean }) => {
-      const projectId = typeof payload === 'string' ? payload : payload?.projectId
-      const force = typeof payload === 'string' ? false : Boolean(payload?.force)
-      if (!projectId) {
-        socket.emit('terminal:data', '\r\n\x1b[31mMissing project id for terminal session.\x1b[0m\r\n')
+    socket.on('terminal:create', async (payload: { projectId: string; terminalId: string; force?: boolean }) => {
+      const { projectId, terminalId, force } = payload
+      if (!projectId || !terminalId) {
+        socket.emit('terminal:data', { terminalId: terminalId || 'default', data: '\r\n\x1b[31mMissing project id or terminal id.\x1b[0m\r\n' })
         return
       }
 
+      const termKey = `${socket.id}:${terminalId}`
+
       try {
         const access = await requireProjectAccess(prisma, projectId, user.userId, 'canWrite')
-        const existing = terminals.get(socket.id)
-        const existingProjectId = terminalProjects.get(socket.id)
+        const existing = terminals.get(termKey)
+        const existingProjectId = terminalProjects.get(termKey)
 
         if (existing && !force && existingProjectId === projectId) {
-          socket.emit('terminal:ready', { projectId })
+          socket.emit('terminal:ready', { projectId, terminalId })
           return
         }
 
         if (existing) {
           existing.kill()
-          terminals.delete(socket.id)
-          terminalProjects.delete(socket.id)
+          terminals.delete(termKey)
+          terminalProjects.delete(termKey)
         }
 
         const shell = process.platform === 'win32' ? 'cmd.exe' : 'bash'
@@ -145,44 +146,68 @@ export function registerSocketHandlers(io: Server) {
           },
         })
 
-        term.onData((data) => socket.emit('terminal:data', data))
+        let buffer = ''
+        let bufferTimeout: NodeJS.Timeout | null = null
+
+        term.onData((data) => {
+          buffer += data
+          if (buffer.length > 50000) {
+             socket.emit('terminal:data', { terminalId, data: buffer })
+             buffer = ''
+             if (bufferTimeout) clearTimeout(bufferTimeout)
+             bufferTimeout = null
+             return
+          }
+          if (!bufferTimeout) {
+            bufferTimeout = setTimeout(() => {
+              socket.emit('terminal:data', { terminalId, data: buffer })
+              buffer = ''
+              bufferTimeout = null
+            }, 15)
+          }
+        })
         term.onExit(() => {
-          terminals.delete(socket.id)
-          terminalProjects.delete(socket.id)
+          if (bufferTimeout) clearTimeout(bufferTimeout)
+          if (buffer) socket.emit('terminal:data', { terminalId, data: buffer })
+          terminals.delete(termKey)
+          terminalProjects.delete(termKey)
         })
 
-        terminals.set(socket.id, term)
-        terminalProjects.set(socket.id, projectId)
-        socket.emit('terminal:data', `\r\n\x1b[1;32m DevForge Terminal\x1b[0m attached to ${projectCwd}\r\n`)
-        socket.emit('terminal:ready', { projectId })
+        terminals.set(termKey, term)
+        terminalProjects.set(termKey, projectId)
+        socket.emit('terminal:data', { terminalId, data: `\r\n\x1b[1;32m CloudLab Terminal\x1b[0m attached to ${projectCwd}\r\n` })
+        socket.emit('terminal:ready', { projectId, terminalId })
       } catch (error: any) {
         socket.emit(
           'terminal:data',
-          `\r\n\x1b[31m${error?.message || 'Unable to create terminal session.'}\x1b[0m\r\n`
+          { terminalId, data: `\r\n\x1b[31m${error?.message || 'Unable to create terminal session.'}\x1b[0m\r\n` }
         )
       }
     })
 
-    socket.on('terminal:input', (data: string) => {
-      terminals.get(socket.id)?.write(data)
+    socket.on('terminal:input', ({ terminalId, data }: { terminalId: string; data: string }) => {
+      const termKey = `${socket.id}:${terminalId}`
+      terminals.get(termKey)?.write(data)
     })
 
-    socket.on('terminal:resize', ({ cols, rows }: { cols: number; rows: number }) => {
-      terminals.get(socket.id)?.resize(cols, rows)
+    socket.on('terminal:resize', ({ terminalId, cols, rows }: { terminalId: string; cols: number; rows: number }) => {
+      const termKey = `${socket.id}:${terminalId}`
+      terminals.get(termKey)?.resize(cols, rows)
     })
 
-    socket.on('terminal:run', async ({ projectId, command }: { projectId: string; command: string }) => {
-      const term = terminals.get(socket.id)
+    socket.on('terminal:run', async ({ projectId, terminalId, command }: { projectId: string; terminalId: string; command: string }) => {
+      const termKey = `${socket.id}:${terminalId}`
+      const term = terminals.get(termKey)
       if (!term) {
-        socket.emit('terminal:data', '\r\n\x1b[31mTerminal session is not ready yet.\x1b[0m\r\n')
+        socket.emit('terminal:data', { terminalId, data: '\r\n\x1b[31mTerminal session is not ready yet.\x1b[0m\r\n' })
         return
       }
 
       try {
         await requireProjectAccess(prisma, projectId, user.userId, 'canWrite')
-        if (terminalProjects.get(socket.id) !== projectId) {
-          socket.emit('terminal:data', '\r\n\x1b[31mTerminal is attached to a different project.\x1b[0m\r\n')
-          socket.emit('terminal:ready', { projectId: terminalProjects.get(socket.id) || '' })
+        if (terminalProjects.get(termKey) !== projectId) {
+          socket.emit('terminal:data', { terminalId, data: '\r\n\x1b[31mTerminal is attached to a different project.\x1b[0m\r\n' })
+          socket.emit('terminal:ready', { projectId: terminalProjects.get(termKey) || '', terminalId })
           return
         }
 
@@ -191,7 +216,7 @@ export function registerSocketHandlers(io: Server) {
       } catch (error: any) {
         socket.emit(
           'terminal:data',
-          `\r\n\x1b[31m${error?.message || 'Unable to run command in terminal.'}\x1b[0m\r\n`
+          { terminalId, data: `\r\n\x1b[31m${error?.message || 'Unable to run command in terminal.'}\x1b[0m\r\n` }
         )
       }
     })
@@ -254,10 +279,14 @@ export function registerSocketHandlers(io: Server) {
     socket.on('disconnect', () => {
       console.log(`[Socket] disconnected: ${user.userId}`)
 
-      // Kill terminal
-      const term = terminals.get(socket.id)
-      if (term) { term.kill(); terminals.delete(socket.id) }
-      terminalProjects.delete(socket.id)
+      // Kill all terminals for this socket
+      for (const [key, term] of terminals.entries()) {
+        if (key.startsWith(`${socket.id}:`)) {
+          term.kill()
+          terminals.delete(key)
+          terminalProjects.delete(key)
+        }
+      }
 
       // Remove from all rooms
       socket.rooms.forEach((roomId) => {

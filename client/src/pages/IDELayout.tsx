@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { filesApi, projectsApi, projectReviewApi, reviewApi } from '../lib/api'
 import { useJoinRoom } from '../hooks/useSocket'
 import { useStore } from '../store'
+import { useShallow } from 'zustand/react/shallow'
 import { TopBar } from '../components/TopBar/TopBar'
 import { Sidebar } from '../components/Sidebar/Sidebar'
 import { Editor } from '../components/Editor/Editor'
@@ -24,7 +25,21 @@ function WorkspaceLoader({ projectId }: { projectId?: string }) {
     setSuggestions,
     setCurrentReview,
     resetWorkspaceState,
-  } = useStore()
+    mobileActivePanel,
+    setMobileActivePanel,
+  } = useStore(useShallow(state => ({
+    activeView: state.activeView,
+    bottomPanelOpen: state.bottomPanelOpen,
+    currentUser: state.currentUser,
+    setCurrentProject: state.setCurrentProject,
+    setFileTree: state.setFileTree,
+    setComments: state.setComments,
+    setSuggestions: state.setSuggestions,
+    setCurrentReview: state.setCurrentReview,
+    resetWorkspaceState: state.resetWorkspaceState,
+    mobileActivePanel: state.mobileActivePanel,
+    setMobileActivePanel: state.setMobileActivePanel,
+  })))
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
 
   if (!token && !currentUser) {
@@ -127,9 +142,20 @@ function WorkspaceLoader({ projectId }: { projectId?: string }) {
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-editor-bg select-none">
       <TopBar />
-      <div className="flex flex-1 overflow-hidden">
-        <Sidebar />
-        <div className="flex flex-col flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden relative">
+        {/* Sidebar */}
+        <div className={`absolute md:relative z-20 h-full w-[85%] max-w-[320px] md:w-auto bg-editor-surface md:bg-transparent border-r border-editor-border/50 shadow-2xl md:shadow-none transition-transform duration-300 ${mobileActivePanel === 'sidebar' ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} md:flex`}>
+          <Sidebar />
+          {/* Mobile overlay close button */}
+          {mobileActivePanel === 'sidebar' && (
+            <button onClick={() => setMobileActivePanel('none')} className="md:hidden absolute top-3 right-3 text-editor-muted hover:text-white bg-editor-bg/80 p-1 rounded">
+              ✕
+            </button>
+          )}
+        </div>
+        
+        {/* Editor & Terminal */}
+        <div className="flex flex-col flex-1 overflow-hidden w-full">
           <div className="flex-1 flex flex-col overflow-hidden">
             {activeView === 'editor' && <Editor />}
             {activeView === 'preview' && <PreviewPane />}
@@ -137,7 +163,25 @@ function WorkspaceLoader({ projectId }: { projectId?: string }) {
           </div>
           {bottomPanelOpen && <TerminalPanel />}
         </div>
-        <ReviewPanel />
+        
+        {/* Review Panel */}
+        <div className={`absolute right-0 md:relative z-20 h-full w-[90%] max-w-[400px] md:w-auto bg-editor-surface md:bg-transparent border-l border-editor-border/50 shadow-2xl md:shadow-none transition-transform duration-300 ${mobileActivePanel === 'review' ? 'translate-x-0' : 'translate-x-full md:translate-x-0'} md:flex`}>
+          <ReviewPanel />
+          {/* Mobile overlay close button */}
+          {mobileActivePanel === 'review' && (
+            <button onClick={() => setMobileActivePanel('none')} className="md:hidden absolute top-3 left-3 text-editor-muted hover:text-white bg-editor-bg/80 p-1 rounded z-50">
+              ✕
+            </button>
+          )}
+        </div>
+
+        {/* Backdrop for mobile overlays */}
+        {mobileActivePanel !== 'none' && (
+           <div 
+             className="absolute inset-0 bg-black/50 z-10 md:hidden backdrop-blur-sm"
+             onClick={() => setMobileActivePanel('none')}
+           />
+        )}
       </div>
     </div>
   )

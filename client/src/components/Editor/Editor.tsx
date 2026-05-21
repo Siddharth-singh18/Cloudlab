@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useCallback, useState } from 'react'
 import MonacoEditor, { OnMount } from '@monaco-editor/react'
 import { X, Circle, Cloud, CloudOff, Play } from 'lucide-react'
 import { useStore } from '../../store'
+import { useShallow } from 'zustand/react/shallow'
 import { getLanguageFromPath, getRunCommand } from '../../lib/utils'
 import { useCollaboration } from '../../hooks/useCollaboration'
 import { filesApi, versionsApi } from '../../lib/api'
@@ -76,7 +77,17 @@ function EditorTabs() {
     setBottomPanelOpen,
     setBottomPanelTab,
     queueTerminalRun,
-  } = useStore()
+  } = useStore(useShallow(state => ({
+    openTabs: state.openTabs,
+    activeTabPath: state.activeTabPath,
+    setActiveTab: state.setActiveTab,
+    closeTab: state.closeTab,
+    currentProject: state.currentProject,
+    fileTree: state.fileTree,
+    setBottomPanelOpen: state.setBottomPanelOpen,
+    setBottomPanelTab: state.setBottomPanelTab,
+    queueTerminalRun: state.queueTerminalRun,
+  })))
 
   if (openTabs.length === 0) return null
 
@@ -130,14 +141,14 @@ function EditorTabs() {
 }
 
 function WelcomeScreen() {
-  const { setActiveSidebarPanel } = useStore()
+  const setActiveSidebarPanel = useStore(state => state.setActiveSidebarPanel)
   return (
     <div className="flex-1 flex flex-col items-center justify-center gap-4 text-editor-muted select-none">
       <div className="w-16 h-16 rounded-2xl bg-editor-surface border border-editor-border flex items-center justify-center">
         <span className="text-3xl">⚡</span>
       </div>
       <div className="text-center">
-        <p className="text-sm font-medium text-editor-text mb-1">DevForge</p>
+        <p className="text-sm font-medium text-editor-text mb-1">CloudLab</p>
         <p className="text-xs text-editor-muted">Collaborative Cloud IDE</p>
       </div>
       <div className="flex flex-col items-center gap-1.5 text-xs">
@@ -157,7 +168,17 @@ export function Editor() {
   const {
     openTabs, activeTabPath, updateTabContent, markTabModified,
     comments, suggestions, highlightedLine, setHighlightedLine, currentProject
-  } = useStore()
+  } = useStore(useShallow(state => ({
+    openTabs: state.openTabs,
+    activeTabPath: state.activeTabPath,
+    updateTabContent: state.updateTabContent,
+    markTabModified: state.markTabModified,
+    comments: state.comments,
+    suggestions: state.suggestions,
+    highlightedLine: state.highlightedLine,
+    setHighlightedLine: state.setHighlightedLine,
+    currentProject: state.currentProject
+  })))
   const queryClient = useQueryClient()
 
   const { updatePresence, ytext } = useCollaboration({
@@ -241,8 +262,8 @@ export function Editor() {
     monacoRef.current = monaco
 
     // Register custom theme
-    monaco.editor.defineTheme('devforge-dark', MONACO_THEME)
-    monaco.editor.setTheme('devforge-dark')
+    monaco.editor.defineTheme('cloudlab-dark', MONACO_THEME)
+    monaco.editor.setTheme('cloudlab-dark')
 
     // Bind Yjs to Monaco
     if (ytext) {
@@ -379,7 +400,7 @@ export function Editor() {
           key={activeTab.path}
           language={getLanguageFromPath(activeTab.name)}
           defaultValue={activeTab.content}
-          theme="devforge-dark"
+          theme="cloudlab-dark"
           onMount={handleEditorDidMount}
           options={{
             readOnly: !canWrite,

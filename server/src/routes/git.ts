@@ -22,8 +22,8 @@ async function getProjectGit(projectId: string, userId: string) {
   const isRepo = await git.checkIsRepo().catch(() => false)
   if (!isRepo) {
     await git.init()
-    await git.addConfig('user.email', 'devforge@localhost')
-    await git.addConfig('user.name', 'DevForge')
+    await git.addConfig('user.email', 'cloudlab@localhost')
+    await git.addConfig('user.name', 'CloudLab')
     await git.add('.')
     await git.commit('chore: initial commit').catch(() => {}) // ok if nothing to commit
   }

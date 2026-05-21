@@ -8,7 +8,8 @@ import 'xterm/css/xterm.css'
 function useXterm(
   containerRef: React.RefObject<HTMLDivElement | null>,
   active: boolean,
-  projectId?: string
+  projectId: string | undefined,
+  terminalId: string
 ) {
   const termRef = useRef<import('xterm').Terminal | null>(null)
   const fitRef  = useRef<import('xterm-addon-fit').FitAddon | null>(null)
@@ -76,11 +77,11 @@ function useXterm(
       fitRef.current = fit
 
       const socket = getSocket()
-      const onData = (data: string) => {
-        if (mounted) term.write(data)
+      const onData = ({ terminalId: tid, data }: { terminalId: string, data: string }) => {
+        if (mounted && tid === terminalId) term.write(data)
       }
-      const onReady = ({ projectId: readyProjectId }: { projectId: string }) => {
-        if (mounted) {
+      const onReady = ({ projectId: readyProjectId, terminalId: tid }: { projectId: string, terminalId: string }) => {
+        if (mounted && tid === terminalId) {
           setSessionProjectId(readyProjectId)
           setIsReady(true)
           requestAnimationFrame(() => fit.fit())
@@ -93,8 +94,8 @@ function useXterm(
         }
         setSessionProjectId(null)
         setIsReady(false)
-        socket.emit('terminal:create', { projectId, force })
-        socket.emit('terminal:resize', { cols: term.cols, rows: term.rows })
+        socket.emit('terminal:create', { projectId, terminalId, force })
+        socket.emit('terminal:resize', { terminalId, cols: term.cols, rows: term.rows })
       }
 
       socket.on('terminal:data', onData)
@@ -108,10 +109,9 @@ function useXterm(
       }
 
       term.onData((data) => {
-        socket.emit('terminal:input', data)
+        socket.emit('terminal:input', { terminalId, data })
       })
 
-      // Handle copy with Ctrl+Shift+C
       term.element?.addEventListener('keydown', (e: KeyboardEvent) => {
         if (e.ctrlKey && e.shiftKey && e.key === 'C') {
           const selection = term.getSelection()
@@ -125,7 +125,7 @@ function useXterm(
 
       resizeObserver = new ResizeObserver(() => {
         fit.fit()
-        socket.emit('terminal:resize', { cols: term.cols, rows: term.rows })
+        socket.emit('terminal:resize', { terminalId, cols: term.cols, rows: term.rows })
       })
       resizeObserver.observe(containerRef.current!)
 
@@ -145,9 +145,52 @@ function useXterm(
       termRef.current?.dispose()
       termRef.current = null
     }
-  }, [active, containerRef, projectId])
+  }, [active, containerRef, projectId, terminalId])
 
   return { termRef, fitRef, sessionProjectId, isReady }
+}
+
+function TerminalInstance({ 
+  terminalId, 
+  projectId, 
+  active,
+  onReadyStateChange
+}: { 
+  terminalId: string; 
+  projectId: string | undefined; 
+  active: boolean;
+  onReadyStateChange: (isReady: boolean) => void;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const { termRef, fitRef, isReady } = useXterm(containerRef, active, projectId, terminalId)
+
+  useEffect(() => {
+    onReadyStateChange(isReady)
+  }, [isReady, onReadyStateChange])
+
+  useEffect(() => {
+    if (active) {
+      const timer = window.setTimeout(() => {
+        fitRef.current?.fit()
+        if (termRef.current) {
+          getSocket().emit('terminal:resize', {
+            terminalId,
+            cols: termRef.current.cols,
+            rows: termRef.current.rows,
+          })
+        }
+      }, 80)
+      return () => window.clearTimeout(timer)
+    }
+  }, [active, fitRef, termRef, terminalId])
+
+  return (
+    <div
+      ref={containerRef}
+      className="w-full h-full"
+      style={{ display: active ? 'block' : 'none' }}
+    />
+  )
 }
 
 export function TerminalPanel() {
@@ -157,24 +200,15 @@ export function TerminalPanel() {
   const queryClient = useQueryClient()
   const [terminalHeight, setTerminalHeight] = useState(200)
   const [maximised, setMaximised] = useState(false)
-  const containerRef = useRef<HTMLDivElement>(null)
+  const [terminals, setTerminals] = useState<{ id: string }[]>([{ id: 'term-1' }])
+  const [terminalReadyStates, setTerminalReadyStates] = useState<Record<string, boolean>>({})
 
-  const { termRef, fitRef, sessionProjectId, isReady } = useXterm(containerRef, bottomPanelOpen, currentProject?.id)
-
+  // Initialize bottomPanelTab to term-1 if it was 'terminal'
   useEffect(() => {
-    if (!bottomPanelOpen || bottomPanelTab !== 'terminal') return
-    const timer = window.setTimeout(() => {
-      fitRef.current?.fit()
-      const socket = getSocket()
-      if (termRef.current) {
-        socket.emit('terminal:resize', {
-          cols: termRef.current.cols,
-          rows: termRef.current.rows,
-        })
-      }
-    }, 80)
-    return () => window.clearTimeout(timer)
-  }, [bottomPanelOpen, bottomPanelTab, maximised, terminalHeight, fitRef, termRef])
+    if (bottomPanelTab === 'terminal') {
+      setBottomPanelTab('term-1')
+    }
+  }, [bottomPanelTab, setBottomPanelTab])
 
   useEffect(() => {
     if (!currentProject?.id) return
@@ -200,52 +234,50 @@ export function TerminalPanel() {
     if (!bottomPanelOpen) return
     if (pendingTerminalRun.projectId !== currentProject.id) return
 
+    const activeTerminalId = terminals.find(t => t.id === bottomPanelTab)?.id || terminals[0].id
     const socket = getSocket()
     
-    // Create terminal if not exists or not for this project
-    if (sessionProjectId !== currentProject.id) {
-      // Listen for ready event once
+    if (!terminalReadyStates[activeTerminalId]) {
       const onReady = () => {
         socket.emit('terminal:run', {
           projectId: pendingTerminalRun.projectId,
+          terminalId: activeTerminalId,
           command: pendingTerminalRun.command,
         })
         clearPendingTerminalRun()
       }
       
-      socket.emit('terminal:create', { projectId: currentProject.id, force: true })
+      socket.emit('terminal:create', { projectId: currentProject.id, terminalId: activeTerminalId, force: true })
       
-      // Set up one-time listener for ready
-      const onReadyWrapper = ({ projectId }: { projectId: string }) => {
-        if (projectId === currentProject.id) {
+      const onReadyWrapper = ({ projectId, terminalId }: { projectId: string, terminalId: string }) => {
+        if (projectId === currentProject.id && terminalId === activeTerminalId) {
           socket.off('terminal:ready', onReadyWrapper)
           onReady()
         }
       }
       
-      const onReadyWrapper2 = onReadyWrapper
-      socket.on('terminal:ready', onReadyWrapper2)
+      socket.on('terminal:ready', onReadyWrapper)
       
-      // Timeout fallback - just try to run anyway after 2 seconds
       const timeoutId = window.setTimeout(() => {
-        socket.off('terminal:ready', onReadyWrapper2)
+        socket.off('terminal:ready', onReadyWrapper)
         socket.emit('terminal:run', {
           projectId: pendingTerminalRun.projectId,
+          terminalId: activeTerminalId,
           command: pendingTerminalRun.command,
         })
         clearPendingTerminalRun()
       }, 2000)
       
       return () => {
-        socket.off('terminal:ready', onReadyWrapper2)
+        socket.off('terminal:ready', onReadyWrapper)
         window.clearTimeout(timeoutId)
       }
     }
 
-    // Terminal is ready, run command immediately
     const timer = window.setTimeout(() => {
       socket.emit('terminal:run', {
         projectId: pendingTerminalRun.projectId,
+        terminalId: activeTerminalId,
         command: pendingTerminalRun.command,
       })
       clearPendingTerminalRun()
@@ -255,49 +287,70 @@ export function TerminalPanel() {
   }, [
     pendingTerminalRun,
     currentProject?.id,
-    sessionProjectId,
+    terminalReadyStates,
     bottomPanelOpen,
+    bottomPanelTab,
+    terminals,
     clearPendingTerminalRun,
   ])
 
+  const activeTerminalId = terminals.find(t => t.id === bottomPanelTab)?.id
+
   const reconnectTerminal = () => {
-    if (!currentProject?.id) return
-    setBottomPanelTab('terminal')
+    if (!currentProject?.id || !activeTerminalId) return
     setBottomPanelOpen(true)
-    getSocket().emit('terminal:create', { projectId: currentProject.id, force: true })
-  }
-
-  const clearTerminal = () => {
-    termRef.current?.clear()
-    termRef.current?.write('\x1b[2J\x1b[H')
-  }
-
-  const copySelection = () => {
-    const selection = termRef.current?.getSelection()
-    if (selection) {
-      navigator.clipboard.writeText(selection)
-    }
+    getSocket().emit('terminal:create', { projectId: currentProject.id, terminalId: activeTerminalId, force: true })
   }
 
   const interruptTerminal = () => {
-    getSocket().emit('terminal:input', '\u0003')
+    if (activeTerminalId) {
+      getSocket().emit('terminal:input', { terminalId: activeTerminalId, data: '\u0003' })
+    }
+  }
+
+  const addTerminal = () => {
+    const newId = `term-${Date.now()}`
+    setTerminals([...terminals, { id: newId }])
+    setBottomPanelTab(newId)
+    setBottomPanelOpen(true)
+    if (currentProject?.id) {
+      getSocket().emit('terminal:create', { projectId: currentProject.id, terminalId: newId, force: true })
+    }
+  }
+
+  const closeTerminal = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    const newTerminals = terminals.filter(t => t.id !== id)
+    if (newTerminals.length === 0) {
+      const defaultId = 'term-1'
+      setTerminals([{ id: defaultId }])
+      setBottomPanelTab(defaultId)
+    } else {
+      setTerminals(newTerminals)
+      if (bottomPanelTab === id) {
+        setBottomPanelTab(newTerminals[0].id)
+      }
+    }
+    // Note: server clears it up if we don't reconnect or socket disconnects, 
+    // but ideally we'd send a close event to free resources.
   }
 
   const height = maximised ? 480 : terminalHeight
 
   const TABS = [
-    { id: 'terminal', label: 'Terminal' },
-    { id: 'output',   label: 'Output' },
-    { id: 'build',    label: 'Build' },
-    { id: 'problems', label: `Problems${buildResult?.warnings.length ? ` (${buildResult.warnings.length})` : ''}` },
-  ] as const
+    ...terminals.map((t, i) => ({ id: t.id, label: `Terminal ${i + 1}`, isTerminal: true })),
+    { id: 'output',   label: 'Output', isTerminal: false },
+    { id: 'build',    label: 'Build', isTerminal: false },
+    { id: 'problems', label: `Problems${buildResult?.warnings.length ? ` (${buildResult.warnings.length})` : ''}`, isTerminal: false },
+  ]
+
+  const isCurrentTabReady = activeTerminalId ? terminalReadyStates[activeTerminalId] : false
 
   return (
     <div
       className="flex flex-col bg-editor-bg border-t border-editor-border shrink-0 overflow-hidden relative"
       style={{ height }}
     >
-      {/* Resize handle moved to the TOP */}
       <div
         className="absolute top-0 left-0 w-full h-1 cursor-ns-resize bg-transparent hover:bg-editor-accent/30 transition-colors shrink-0 z-20"
         onMouseDown={(e) => {
@@ -316,26 +369,32 @@ export function TerminalPanel() {
         }}
       />
 
-      {/* Tab bar */}
-      <div className="flex items-center bg-editor-surface border-b border-editor-border shrink-0">
-        {TABS.map(({ id, label }) => (
-          <button
+      <div className="flex items-center bg-editor-surface border-b border-editor-border shrink-0 overflow-x-auto no-scrollbar">
+        {TABS.map(({ id, label, isTerminal }) => (
+          <div
             key={id}
             onClick={() => setBottomPanelTab(id)}
-            className={`px-3 py-1.5 text-[11px] border-b-2 transition-colors ${
+            className={`flex items-center px-3 py-1.5 text-[11px] border-b-2 cursor-pointer transition-colors whitespace-nowrap ${
               bottomPanelTab === id
                 ? 'border-editor-text text-editor-text'
                 : 'border-transparent text-editor-muted hover:text-editor-text'
             }`}
           >
             {label}
-          </button>
+            {isTerminal && (
+              <div 
+                className="ml-2 hover:bg-white/10 rounded-full p-0.5" 
+                onClick={(e) => closeTerminal(id, e)}
+              >
+                <X size={10} />
+              </div>
+            )}
+          </div>
         ))}
 
-        <div className="flex-1" />
+        <div className="flex-1 min-w-[20px]" />
 
-        {/* Build status chip */}
-        <div className={`flex items-center gap-1 mr-2 text-[10px] px-2 py-0.5 rounded-full ${
+        <div className={`flex items-center gap-1 mr-2 text-[10px] px-2 py-0.5 rounded-full whitespace-nowrap ${
           buildStatus === 'success' ? 'bg-green-400/10 text-green-400'
           : buildStatus === 'failed' ? 'bg-red-400/10 text-red-400'
           : buildStatus === 'running' ? 'bg-yellow-400/10 text-yellow-400'
@@ -353,82 +412,67 @@ export function TerminalPanel() {
            : 'Idle'}
         </div>
 
-        <div className="hidden md:flex items-center gap-1 mr-2 text-[10px] text-editor-muted">
-          <span className={`w-1.5 h-1.5 rounded-full ${isReady ? 'bg-green-400' : 'bg-yellow-400 animate-pulse_dot'}`} />
-          {currentProject?.name ? (
-            <span>{isReady ? `Attached · ${currentProject.name}` : `Connecting · ${currentProject.name}`}</span>
-          ) : (
-            <span>No project</span>
-          )}
-        </div>
+        {activeTerminalId && (
+          <div className="hidden md:flex items-center gap-1 mr-2 text-[10px] text-editor-muted whitespace-nowrap">
+            <span className={`w-1.5 h-1.5 rounded-full ${isCurrentTabReady ? 'bg-green-400' : 'bg-yellow-400 animate-pulse_dot'}`} />
+            {currentProject?.name ? (
+              <span>{isCurrentTabReady ? `Attached · ${currentProject.name}` : `Connecting · ${currentProject.name}`}</span>
+            ) : (
+              <span>No project</span>
+            )}
+          </div>
+        )}
 
         <button
           onClick={interruptTerminal}
-          className="sidebar-icon w-6 h-6 mr-1"
+          className="sidebar-icon w-6 h-6 mr-1 shrink-0"
           title="Send Ctrl+C"
-          disabled={!currentProject?.id}
+          disabled={!currentProject?.id || !activeTerminalId}
         >
           <Square size={11} />
         </button>
         <button
-          onClick={clearTerminal}
-          className="sidebar-icon w-6 h-6 mr-1"
-          title="Clear terminal"
-        >
-          <Eraser size={12} />
-        </button>
-        <button
-          onClick={copySelection}
-          className="sidebar-icon w-6 h-6 mr-1"
-          title="Copy selection (Ctrl+Shift+C)"
-        >
-          <Copy size={12} />
-        </button>
-        <button
           onClick={reconnectTerminal}
-          className="sidebar-icon w-6 h-6 mr-1"
+          className="sidebar-icon w-6 h-6 mr-1 shrink-0"
           title="Reconnect terminal"
-          disabled={!currentProject?.id}
+          disabled={!currentProject?.id || !activeTerminalId}
         >
           <RotateCcw size={12} />
         </button>
         <button
-          onClick={() => {
-            setBottomPanelTab('terminal')
-            setBottomPanelOpen(true)
-            if (currentProject?.id) {
-              getSocket().emit('terminal:create', { projectId: currentProject.id, force: true })
-            }
-          }}
-          className="sidebar-icon w-6 h-6 mr-1"
+          onClick={addTerminal}
+          className="sidebar-icon w-6 h-6 mr-1 shrink-0"
           title="New terminal session"
         >
           <Plus size={12} />
         </button>
         <button
           onClick={() => setMaximised(!maximised)}
-          className="sidebar-icon w-6 h-6 mr-1"
+          className="sidebar-icon w-6 h-6 mr-1 shrink-0"
           title={maximised ? 'Restore' : 'Maximise'}
         >
           {maximised ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
         </button>
         <button
           onClick={() => setBottomPanelOpen(false)}
-          className="sidebar-icon w-6 h-6 mr-1"
+          className="sidebar-icon w-6 h-6 mr-1 shrink-0"
           title="Close panel"
         >
           <X size={12} />
         </button>
       </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-hidden pt-1">
-        {/* Terminal */}
-        <div
-          ref={containerRef}
-          className="w-full h-full"
-          style={{ visibility: bottomPanelTab === 'terminal' ? 'visible' : 'hidden' }}
-        />
+      <div className="flex-1 overflow-hidden pt-1 relative">
+        {/* Terminals */}
+        {terminals.map(term => (
+          <TerminalInstance
+            key={term.id}
+            terminalId={term.id}
+            projectId={currentProject?.id}
+            active={bottomPanelTab === term.id}
+            onReadyStateChange={(ready) => setTerminalReadyStates(prev => ({ ...prev, [term.id]: ready }))}
+          />
+        ))}
 
         {/* Output */}
         {bottomPanelTab === 'output' && (

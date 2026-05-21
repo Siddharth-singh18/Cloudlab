@@ -1,4 +1,4 @@
-// DevForge — Prisma schema
+// CloudLab — Prisma schema
 // Run: npx prisma migrate dev --name init
 
 generator client {

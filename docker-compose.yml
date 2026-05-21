@@ -4,15 +4,15 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: devforge
-      POSTGRES_PASSWORD: devforge
-      POSTGRES_DB: devforge
+      POSTGRES_USER: cloudlab
+      POSTGRES_PASSWORD: cloudlab
+      POSTGRES_DB: cloudlab
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - '5434:5432'
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U devforge']
+      test: ['CMD-SHELL', 'pg_isready -U cloudlab']
       interval: 5s
       timeout: 3s
       retries: 10
@@ -46,7 +46,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3001
-      DATABASE_URL: postgresql://devforge:devforge@postgres:5432/devforge
+      DATABASE_URL: postgresql://cloudlab:cloudlab@postgres:5432/cloudlab
       REDIS_URL: redis://redis:6379
       JWT_SECRET: ${JWT_SECRET:-change-me-in-prod}
       STORAGE_TYPE: local

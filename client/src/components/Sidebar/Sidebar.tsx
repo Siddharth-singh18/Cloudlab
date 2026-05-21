@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react'
 import { Files, Search, GitBranch, Puzzle, Terminal, Settings } from 'lucide-react'
 import { useStore } from '../../store'
+import { useShallow } from 'zustand/react/shallow'
 import { FileTree } from '../FileTree/FileTree'
 import { SearchPanel } from './SearchPanel'
 import { GitPanel } from './GitPanel'
@@ -17,7 +18,13 @@ export function Sidebar() {
   const {
     activeSidebarPanel, setActiveSidebarPanel,
     bottomPanelOpen, setBottomPanelOpen, setBottomPanelTab,
-  } = useStore()
+  } = useStore(useShallow(state => ({
+    activeSidebarPanel: state.activeSidebarPanel,
+    setActiveSidebarPanel: state.setActiveSidebarPanel,
+    bottomPanelOpen: state.bottomPanelOpen,
+    setBottomPanelOpen: state.setBottomPanelOpen,
+    setBottomPanelTab: state.setBottomPanelTab
+  })))
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {

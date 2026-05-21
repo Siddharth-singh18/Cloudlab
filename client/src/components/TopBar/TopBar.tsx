@@ -6,6 +6,7 @@ import {
   GitPullRequest, UserPlus, Clock
 } from 'lucide-react'
 import { useStore } from '../../store'
+import { useShallow } from 'zustand/react/shallow'
 import { shortName, timeAgo } from '../../lib/utils'
 import { notificationsApi } from '../../lib/api'
 
@@ -18,8 +19,16 @@ const USER_COLORS: Record<string, string> = {
 
 export function TopBar() {
   const {
-    currentReview, presences, currentUser, currentProject, activeView, setActiveView,
-  } = useStore()
+    currentReview, presences, currentUser, currentProject, activeView, setActiveView, setMobileActivePanel
+  } = useStore(useShallow(state => ({
+    currentReview: state.currentReview,
+    presences: state.presences,
+    currentUser: state.currentUser,
+    currentProject: state.currentProject,
+    activeView: state.activeView,
+    setActiveView: state.setActiveView,
+    setMobileActivePanel: state.setMobileActivePanel
+  })))
   const [showMergeModal, setShowMergeModal] = useState(false)
   const [showNotifications, setShowNotifications] = useState(false)
   const queryClient = useQueryClient()
@@ -56,8 +65,11 @@ export function TopBar() {
   const canMerge = currentProject?.permissions?.canMerge ?? true
 
   return (
-    <div className="h-10 bg-editor-surface border-b border-editor-border grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center px-3 gap-3 shrink-0 z-10">
-      <div className="flex items-center gap-2 min-w-0">
+    <div className="h-10 bg-editor-surface border-b border-editor-border flex items-center justify-between px-3 gap-3 shrink-0 z-10 w-full overflow-x-auto no-scrollbar">
+      <div className="flex items-center gap-2 shrink-0">
+        <button onClick={() => setMobileActivePanel('sidebar')} className="md:hidden text-editor-muted hover:text-white p-1">
+           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+        </button>
         <div className="flex items-center gap-1.5 mr-1 shrink-0">
           <div className="w-5 h-5 bg-editor-accent rounded flex items-center justify-center">
             <Zap size={12} className="text-editor-bg" />
@@ -236,8 +248,12 @@ export function TopBar() {
           )}
         </div>
 
-        <button className="sidebar-icon w-7 h-7 shrink-0">
+        <button className="sidebar-icon w-7 h-7 shrink-0 hidden md:flex">
           <Settings size={14} />
+        </button>
+        
+        <button onClick={() => setMobileActivePanel('review')} className="md:hidden text-editor-muted hover:text-white p-1 ml-1">
+           <MessageSquare size={16} />
         </button>
       </div>
 
@@ -250,7 +266,10 @@ export function TopBar() {
 }
 
 function MergeModal({ onClose }: { onClose: () => void }) {
-  const { comments, suggestions } = useStore()
+  const { comments, suggestions } = useStore(useShallow(state => ({
+    comments: state.comments,
+    suggestions: state.suggestions
+  })))
   const openComments = comments.filter((c) => !c.resolved).length
   const pendingSuggestions = suggestions.filter((s) => s.status === 'pending').length
 

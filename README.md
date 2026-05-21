@@ -1,4 +1,4 @@
-# ⚡ DevForge — Collaborative Cloud IDE
+# ⚡ CloudLab — Collaborative Cloud IDE
 
 A production-grade, full-stack collaborative IDE platform that combines GitHub PRs, VS Code, Replit, Codespaces, and Figma-style collaboration into one unified developer experience.
 
@@ -38,7 +38,7 @@ A production-grade, full-stack collaborative IDE platform that combines GitHub P
 ## 🗂️ Project structure
 
 ```
-devforge/
+cloudlab/
 ├── client/                     # React + Vite frontend
 │   └── src/
 │       ├── components/
@@ -268,7 +268,7 @@ yjs:awareness({ clientId, userId, awareness })
 ## 🛣️ Roadmap
 
 - [ ] **Phase 2** — Docker container per project, real `npm run dev` execution
-- [ ] **Phase 3** — Wildcard subdomain preview routing (`*.preview.devforge.app`)
+- [ ] **Phase 3** — Wildcard subdomain preview routing (`*.preview.cloudlab.app`)
 - [ ] **Phase 4** — GitHub OAuth + import repos
 - [ ] **Phase 5** — AI code review assistant (Claude API integration)
 - [ ] **Phase 6** — Voice/video rooms (WebRTC)

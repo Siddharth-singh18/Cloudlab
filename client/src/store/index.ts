@@ -69,8 +69,8 @@ interface EditorState {
   setActiveSidebarPanel: (panel: 'files' | 'search' | 'git' | 'extensions' | null) => void
   activeRightPanel: 'review' | 'timeline' | 'prs' | 'chat'
   setActiveRightPanel: (panel: 'review' | 'timeline' | 'prs' | 'chat') => void
-  bottomPanelTab: 'terminal' | 'output' | 'build' | 'problems'
-  setBottomPanelTab: (tab: 'terminal' | 'output' | 'build' | 'problems') => void
+  bottomPanelTab: string
+  setBottomPanelTab: (tab: string) => void
   bottomPanelOpen: boolean
   setBottomPanelOpen: (open: boolean) => void
   rightPanelOpen: boolean
@@ -79,6 +79,8 @@ interface EditorState {
   setActiveView: (view: 'editor' | 'preview' | 'diff') => void
   highlightedLine: number | null
   setHighlightedLine: (line: number | null) => void
+  mobileActivePanel: 'sidebar' | 'review' | 'none'
+  setMobileActivePanel: (panel: 'sidebar' | 'review' | 'none') => void
   resetWorkspaceState: () => void
 }
 
@@ -199,6 +201,8 @@ export const useStore = create<EditorState>()(
     setActiveView: (view) => set({ activeView: view }),
     highlightedLine: null,
     setHighlightedLine: (line) => set({ highlightedLine: line }),
+    mobileActivePanel: 'none',
+    setMobileActivePanel: (panel) => set({ mobileActivePanel: panel }),
     resetWorkspaceState: () => set({
       fileTree: [],
       openTabs: [],
@@ -213,6 +217,7 @@ export const useStore = create<EditorState>()(
       buildResult: null,
       pendingTerminalRun: null,
       highlightedLine: null,
+      mobileActivePanel: 'none',
     }),
   }))
 )

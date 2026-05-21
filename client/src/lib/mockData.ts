@@ -4,10 +4,10 @@ import type {
 } from '../types'
 
 export const MOCK_USERS: User[] = [
-  { id: 'user-rahul', name: 'Rahul Sharma', email: 'rahul@devforge.app', color: '#f85149' },
-  { id: 'user-ananya', name: 'Ananya Gupta', email: 'ananya@devforge.app', color: '#3fb950' },
-  { id: 'user-siddharth', name: 'Siddharth Singh', email: 'sid@devforge.app', color: '#ffa657' },
-  { id: 'user-you', name: 'You', email: 'you@devforge.app', color: '#58a6ff' },
+  { id: 'user-rahul', name: 'Rahul Sharma', email: 'rahul@cloudlab.app', color: '#f85149' },
+  { id: 'user-ananya', name: 'Ananya Gupta', email: 'ananya@cloudlab.app', color: '#3fb950' },
+  { id: 'user-siddharth', name: 'Siddharth Singh', email: 'sid@cloudlab.app', color: '#ffa657' },
+  { id: 'user-you', name: 'You', email: 'you@cloudlab.app', color: '#58a6ff' },
 ]
 
 export const MOCK_FILE_TREE: FileNode[] = [
@@ -206,7 +206,7 @@ export const MOCK_REVIEW: ReviewSession = {
   collaborators: MOCK_USERS,
   createdAt: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
   updatedAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
-  previewUrl: 'https://preview.feature-auth.devforge.app',
+  previewUrl: 'https://preview.feature-auth.cloudlab.app',
   buildStatus: 'success',
 }
 
@@ -282,7 +282,7 @@ export const MOCK_SUGGESTIONS: Suggestion[] = [
 export const MOCK_ACTIVITY: ActivityEvent[] = [
   {
     id: 'act-1', type: 'build_pass', userId: 'system',
-    user: { id: 'system', name: 'DevForge', email: '', color: '#3fb950' },
+    user: { id: 'system', name: 'CloudLab', email: '', color: '#3fb950' },
     description: 'Build passed in 3.42s · 284 modules',
     timestamp: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
   },
@@ -306,8 +306,8 @@ export const MOCK_ACTIVITY: ActivityEvent[] = [
   },
   {
     id: 'act-5', type: 'preview_deploy', userId: 'system',
-    user: { id: 'system', name: 'DevForge', email: '', color: '#3fb950' },
-    description: 'Preview deployed at preview.feature-auth.devforge.app',
+    user: { id: 'system', name: 'CloudLab', email: '', color: '#3fb950' },
+    description: 'Preview deployed at preview.feature-auth.cloudlab.app',
     timestamp: new Date(Date.now() - 25 * 60 * 1000).toISOString(),
   },
   {

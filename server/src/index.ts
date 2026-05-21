@@ -97,7 +97,7 @@ async function main() {
   app.use(errorHandler)
 
   httpServer.listen(PORT, () => {
-    console.log(`\n  DevForge server listening on :${PORT}`)
+    console.log(`\n  CloudLab server listening on :${PORT}`)
     console.log(`  Health: http://localhost:${PORT}/api/health\n`)
   })
 }

@@ -78,4 +78,22 @@ router.post('/logout', (_req, res) => {
   return res.json({ ok: true })
 })
 
+// POST /api/auth/avatar
+router.post('/avatar', requireAuth, async (req: AuthRequest, res: Response) => {
+  const schema = z.object({
+    avatar: z.string().url().or(z.string().startsWith('data:image/')),
+  })
+
+  const parsed = schema.safeParse(req.body)
+  if (!parsed.success) return res.status(400).json({ error: 'Invalid image data' })
+
+  const user = await prisma.user.update({
+    where: { id: req.user!.userId },
+    data: { avatar: parsed.data.avatar },
+    select: { id: true, name: true, email: true, avatar: true, color: true, createdAt: true },
+  })
+
+  return res.json(user)
+})
+
 export { router as authRouter }

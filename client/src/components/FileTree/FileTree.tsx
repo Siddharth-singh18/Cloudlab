@@ -7,6 +7,7 @@ import {
   CheckCircle2, AlertCircle, Clock3, Copy
 } from 'lucide-react'
 import { useStore } from '../../store'
+import { useShallow } from 'zustand/react/shallow'
 import { MOCK_FILE_CONTENTS } from '../../lib/mockData'
 import { getLanguageFromPath, joinPath } from '../../lib/utils'
 import { filesApi } from '../../lib/api'
@@ -40,7 +41,14 @@ function getReviewStatusBadge(node: FileNode) {
 }
 
 function TreeNode({ node, depth = 0 }: { node: FileNode; depth?: number }) {
-  const { expandedFolders, toggleFolder, openTab, activeTabPath, currentProject, closeTab } = useStore()
+  const { expandedFolders, toggleFolder, openTab, activeTabPath, currentProject, closeTab } = useStore(useShallow(state => ({
+    expandedFolders: state.expandedFolders,
+    toggleFolder: state.toggleFolder,
+    openTab: state.openTab,
+    activeTabPath: state.activeTabPath,
+    currentProject: state.currentProject,
+    closeTab: state.closeTab
+  })))
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
   const queryClient = useQueryClient()
   const isExpanded = expandedFolders.has(node.path)
@@ -313,7 +321,11 @@ function ContextMenu({
 }
 
 export function FileTree() {
-  const { fileTree, activeSidebarPanel, currentProject } = useStore()
+  const { fileTree, activeSidebarPanel, currentProject } = useStore(useShallow(state => ({
+    fileTree: state.fileTree,
+    activeSidebarPanel: state.activeSidebarPanel,
+    currentProject: state.currentProject
+  })))
   const [sidebarWidth, setSidebarWidth] = useState(208)
   const [panelContextMenu, setPanelContextMenu] = useState<{ x: number; y: number } | null>(null)
   const queryClient = useQueryClient()

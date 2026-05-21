@@ -41,8 +41,8 @@ export async function startProjectContainer(
       AutoRemove: false,
     },
     Labels: {
-      'devforge.projectId': projectId,
-      'devforge.managed': 'true',
+      'cloudlab.projectId': projectId,
+      'cloudlab.managed': 'true',
     },
   })
 

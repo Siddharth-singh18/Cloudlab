@@ -1,4 +1,5 @@
 import axios from 'axios'
+import toast from 'react-hot-toast'
 
 export const api = axios.create({
   baseURL: '/api',
@@ -17,6 +18,9 @@ api.interceptors.response.use(
     if (err.response?.status === 401) {
       localStorage.removeItem('token')
       window.location.href = '/login'
+    } else {
+      const msg = err.response?.data?.error || err.message || 'An unexpected error occurred'
+      toast.error(msg)
     }
     return Promise.reject(err)
   }
@@ -155,6 +159,7 @@ export const authApi = {
     api.post('/auth/register', { name, email, password }).then((r) => r.data),
   me: () => api.get('/auth/me').then((r) => r.data),
   logout: () => api.post('/auth/logout').then((r) => r.data),
+  updateAvatar: (avatar: string) => api.post('/auth/avatar', { avatar }).then((r) => r.data),
 }
 
 // ─── Versions ───────────────────────────────────────────────────────────────
