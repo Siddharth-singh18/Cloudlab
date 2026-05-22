@@ -1,8 +1,14 @@
 import axios from 'axios'
 import toast from 'react-hot-toast'
 
+
+// export const api = axios.create({
+//   baseURL: '/api',
+//   withCredentials: true,
+// })
+
 export const api = axios.create({
-  baseURL: '/api',
+  baseURL: import.meta.env.VITE_API_URL,
   withCredentials: true,
 })
 
