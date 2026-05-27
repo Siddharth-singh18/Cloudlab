@@ -64,6 +64,12 @@ interface EditorState {
   queueTerminalRun: (payload: { projectId: string; command: string; nonce: number }) => void
   clearPendingTerminalRun: () => void
 
+  // Layout & Status
+  sidebarWidth: number
+  setSidebarWidth: (width: number) => void
+  saveStatus: 'saved' | 'saving' | 'unsaved'
+  setSaveStatus: (status: 'saved' | 'saving' | 'unsaved') => void
+
   // UI state
   activeSidebarPanel: 'files' | 'search' | 'git' | 'extensions' | null
   setActiveSidebarPanel: (panel: 'files' | 'search' | 'git' | 'extensions' | null) => void
@@ -185,6 +191,12 @@ export const useStore = create<EditorState>()(
     pendingTerminalRun: null,
     queueTerminalRun: (payload) => set({ pendingTerminalRun: payload }),
     clearPendingTerminalRun: () => set({ pendingTerminalRun: null }),
+
+    // Layout & Status
+    sidebarWidth: 208,
+    setSidebarWidth: (width) => set({ sidebarWidth: width }),
+    saveStatus: 'saved',
+    setSaveStatus: (status) => set({ saveStatus: status }),
 
     // UI
     activeSidebarPanel: 'files',

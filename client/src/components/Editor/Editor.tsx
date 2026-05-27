@@ -167,7 +167,8 @@ function WelcomeScreen() {
 export function Editor() {
   const {
     openTabs, activeTabPath, updateTabContent, markTabModified,
-    comments, suggestions, highlightedLine, setHighlightedLine, currentProject
+    comments, suggestions, highlightedLine, setHighlightedLine, currentProject,
+    setSaveStatus
   } = useStore(useShallow(state => ({
     openTabs: state.openTabs,
     activeTabPath: state.activeTabPath,
@@ -177,7 +178,8 @@ export function Editor() {
     suggestions: state.suggestions,
     highlightedLine: state.highlightedLine,
     setHighlightedLine: state.setHighlightedLine,
-    currentProject: state.currentProject
+    currentProject: state.currentProject,
+    setSaveStatus: state.setSaveStatus
   })))
   const queryClient = useQueryClient()
 
@@ -194,7 +196,6 @@ export function Editor() {
 
   const activeTab = openTabs.find((t) => t.path === activeTabPath)
   const canWrite = currentProject?.permissions?.canWrite ?? true
-  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved')
   const [lastSaved, setLastSaved] = useState<Date | null>(null)
 
   const saveFileMutation = useMutation({
@@ -436,33 +437,6 @@ export function Editor() {
             },
           }}
         />
-      </div>
-
-      {/* Status bar */}
-      <div className="h-5 bg-editor-surface border-t border-editor-border flex items-center px-3 gap-3 text-[10px] text-editor-muted">
-        <span>{activeTab.language || 'TypeScript'}</span>
-        <span>UTF-8</span>
-        <span>LF</span>
-        <div className="flex-1" />
-        {!canWrite && (
-          <span className="text-blue-300">Review mode</span>
-        )}
-        {saveStatus === 'saving' && (
-          <span className="flex items-center gap-1 text-yellow-400">
-            <Cloud size={10} className="animate-pulse" /> Saving...
-          </span>
-        )}
-        {saveStatus === 'unsaved' && canWrite && (
-          <span className="flex items-center gap-1 text-yellow-400">
-            <CloudOff size={10} /> Unsaved
-          </span>
-        )}
-        {saveStatus === 'saved' && canWrite && (
-          <span className="flex items-center gap-1 text-editor-green">
-            <Cloud size={10} /> Saved
-          </span>
-        )}
-        <span>Spaces: 2</span>
       </div>
     </div>
   )

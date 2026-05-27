@@ -13,6 +13,7 @@ import { DiffView } from '../components/Editor/DiffView'
 import { PreviewPane } from '../components/Editor/PreviewPane'
 import { TerminalPanel } from '../components/Terminal/TerminalPanel'
 import { ReviewPanel } from '../components/ReviewPanel/ReviewPanel'
+import { StatusBar } from '../components/StatusBar/StatusBar'
 
 function WorkspaceLoader({ projectId }: { projectId?: string }) {
   const {
@@ -183,6 +184,7 @@ function WorkspaceLoader({ projectId }: { projectId?: string }) {
            />
         )}
       </div>
+      <StatusBar />
     </div>
   )
 }

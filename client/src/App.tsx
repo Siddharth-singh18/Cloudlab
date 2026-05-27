@@ -9,6 +9,7 @@ const LandingPage = lazy(() => import('./pages/LandingPage').then(m => ({ defaul
 const ProjectsPage = lazy(() => import('./pages/ProjectsPage').then(m => ({ default: m.ProjectsPage })))
 const ProjectDetailsPage = lazy(() => import('./pages/ProjectDetailsPage').then(m => ({ default: m.ProjectDetailsPage })))
 const AuthPage = lazy(() => import('./pages/AuthPage').then(m => ({ default: m.AuthPage })))
+const JoinPage = lazy(() => import('./pages/JoinPage').then(m => ({ default: m.JoinPage })))
 
 function AppBootstrap() {
   const { currentUser, setCurrentUser } = useStore()
@@ -41,6 +42,7 @@ export default function App() {
           <Route path="/register" element={<AuthPage mode="register" />} />
           <Route path="/projects" element={<ProjectsPage />} />
           <Route path="/projects/:id" element={<ProjectDetailsPage />} />
+          <Route path="/join/:token" element={<JoinPage />} />
           <Route path="/ide/:id?" element={<IDELayout />} />
           <Route path="*" element={<IDELayout />} />
         </Routes>

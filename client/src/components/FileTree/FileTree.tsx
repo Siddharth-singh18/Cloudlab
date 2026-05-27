@@ -326,7 +326,6 @@ export function FileTree() {
     activeSidebarPanel: state.activeSidebarPanel,
     currentProject: state.currentProject
   })))
-  const [sidebarWidth, setSidebarWidth] = useState(208)
   const [panelContextMenu, setPanelContextMenu] = useState<{ x: number; y: number } | null>(null)
   const queryClient = useQueryClient()
   const canWrite = currentProject?.permissions?.canWrite ?? true
@@ -360,8 +359,7 @@ export function FileTree() {
 
   return (
     <div 
-      className="bg-editor-surface border-r border-editor-border flex flex-col shrink-0 overflow-hidden relative"
-      style={{ width: sidebarWidth }}
+      className="flex-1 w-full flex flex-col overflow-hidden relative"
       onContextMenu={(e) => {
         if (!canWrite) return
         if ((e.target as HTMLElement).closest('[data-tree-node="true"]')) return
@@ -433,25 +431,6 @@ export function FileTree() {
           onClose={() => setPanelContextMenu(null)}
         />
       )}
-
-      {/* Resize handle */}
-      <div
-        className="absolute top-0 right-0 w-1 h-full cursor-ew-resize bg-transparent hover:bg-editor-accent/30 transition-colors z-20"
-        onMouseDown={(e) => {
-          const startX = e.clientX
-          const startW = sidebarWidth
-          const onMove = (ev: MouseEvent) => {
-            const delta = ev.clientX - startX
-            setSidebarWidth(Math.min(600, Math.max(150, startW + delta)))
-          }
-          const onUp = () => {
-            window.removeEventListener('mousemove', onMove)
-            window.removeEventListener('mouseup', onUp)
-          }
-          window.addEventListener('mousemove', onMove)
-          window.addEventListener('mouseup', onUp)
-        }}
-      />
     </div>
   )
 }

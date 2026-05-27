@@ -13,6 +13,7 @@ const LANG_COLOR: Record<string, string> = {
   React: '#38bdf8',
   Python: '#a78bfa',
   Go: '#34d399',
+  Workspace: '#64748b',
 }
 
 function AvatarDropdown() {
@@ -97,7 +98,7 @@ function NewProjectModal({ onClose }: { onClose: () => void }) {
     mutationFn: () => projectsApi.create({
       name: name.trim(),
       description: description.trim() || undefined,
-      language: lang,
+      language: 'Workspace',
       isPublic,
     }),
     onSuccess: async (project) => {
@@ -137,21 +138,6 @@ function NewProjectModal({ onClose }: { onClose: () => void }) {
               placeholder="A brief description…"
               className="w-full bg-[#161b22] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
             />
-          </div>
-
-          <div>
-            <label className="text-xs font-medium text-[#7d8590] mb-1.5 block">Language / Template</label>
-            <select
-              value={lang}
-              onChange={(e) => setLang(e.target.value)}
-              className="w-full bg-[#161b22] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-            >
-              <option value="Node.js">Node.js</option>
-              <option value="React">React</option>
-              <option value="TypeScript">TypeScript</option>
-              <option value="Python">Python</option>
-              <option value="HTML/CSS">HTML/CSS</option>
-            </select>
           </div>
 
           <label className="flex items-center gap-2 cursor-pointer mt-2">

@@ -1,10 +1,11 @@
 import React, { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Folder, File, Code, Terminal, ArrowLeft, GitCommit, GitPullRequest, History, FileText } from 'lucide-react'
+import { Folder, File, Code, Terminal, ArrowLeft, GitCommit, GitPullRequest, History, FileText, Users } from 'lucide-react'
 import Editor from '@monaco-editor/react'
 import { projectsApi, filesApi } from '../lib/api'
 import { FileNode } from '../types'
+import toast from 'react-hot-toast'
 
 type TabType = 'files' | 'commits' | 'prs' | 'history'
 
@@ -66,6 +67,17 @@ export function ProjectDetailsPage() {
     )
   }
 
+  const copyInviteLink = async () => {
+    try {
+      const { inviteToken } = await projectsApi.getInviteToken(id!)
+      const inviteUrl = `${window.location.origin}/join/${inviteToken}`
+      await navigator.clipboard.writeText(inviteUrl)
+      toast.success('Invite link copied to clipboard!')
+    } catch (err: any) {
+      toast.error('Failed to generate invite link')
+    }
+  }
+
   if (projectLoading || treeLoading) {
     return (
       <div className="min-h-screen bg-editor-bg flex items-center justify-center text-editor-muted">
@@ -102,6 +114,12 @@ export function ProjectDetailsPage() {
         <div className="h-4 w-px bg-editor-border" />
         <span className="font-bold text-editor-text">{project.name}</span>
         <div className="flex-1" />
+        <button 
+          onClick={copyInviteLink}
+          className="flex items-center gap-2 px-4 py-2 bg-editor-surface border border-editor-border text-editor-text rounded hover:bg-white/5 transition-colors font-semibold text-sm"
+        >
+          <Users size={16} className="text-purple-400" /> Invite Team
+        </button>
         <button 
           onClick={() => navigate(`/ide/${project.id}`)}
           className="flex items-center gap-2 px-4 py-2 bg-editor-accent text-editor-bg rounded hover:bg-blue-400 transition-colors shadow-lg shadow-editor-accent/20 font-bold text-sm"

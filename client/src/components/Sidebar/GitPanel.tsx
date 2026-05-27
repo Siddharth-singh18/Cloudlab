@@ -22,7 +22,6 @@ function GitHubSection({ onClose }: { onClose?: () => void }) {
   const queryClient = useQueryClient()
   const [githubUrl, setGithubUrl] = useState('')
   const [branch, setBranch] = useState('main')
-  const [githubToken, setGithubToken] = useState(() => localStorage.getItem('cloudlab_github_token') || '')
   const [pushBranchName, setPushBranchName] = useState('workspace-update')
   const [commitMessage, setCommitMessage] = useState('')
   const [pushLoading, setPushLoading] = useState(false)
@@ -35,8 +34,8 @@ function GitHubSection({ onClose }: { onClose?: () => void }) {
     retry: false,
   })
   const branchesQuery = useQuery({
-    queryKey: ['github-branches', githubUrl, githubToken],
-    queryFn: () => githubApi.branches(githubUrl, githubToken || undefined),
+    queryKey: ['github-branches', githubUrl],
+    queryFn: () => githubApi.branches(githubUrl),
     enabled: githubUrl.trim().length > 0,
     retry: false,
   })
@@ -54,14 +53,13 @@ function GitHubSection({ onClose }: { onClose?: () => void }) {
       setImportStage('Fetching selected branch…')
       await new Promise((resolve) => setTimeout(resolve, 250))
       setImportStage('Syncing files into CloudLab workspace…')
-      return githubApi.import(currentProject.id, githubUrl, branch, githubToken)
+      return githubApi.import(currentProject.id, githubUrl, branch)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['fileTree', currentProject?.id] })
       queryClient.invalidateQueries({ queryKey: ['projects'] })
       queryClient.invalidateQueries({ queryKey: ['github-history', currentProject?.id] })
       queryClient.invalidateQueries({ queryKey: ['github-status'] })
-      localStorage.setItem('cloudlab_github_token', githubToken)
       setGithubUrl('')
       setImportStage(null)
       alert('Successfully imported from GitHub!')
@@ -76,11 +74,10 @@ function GitHubSection({ onClose }: { onClose?: () => void }) {
     mutationFn: async () => {
       if (!currentProject?.id) throw new Error('No project')
       setPushLoading(true)
-      return githubApi.push(currentProject.id, pushBranchName, commitMessage || undefined, githubUrl || undefined, githubToken || undefined, branch || undefined)
+      return githubApi.push(currentProject.id, pushBranchName, commitMessage || undefined, githubUrl || undefined, branch || undefined)
     },
     onSuccess: (data) => {
       setPushLoading(false)
-      localStorage.setItem('cloudlab_github_token', githubToken)
       queryClient.invalidateQueries({ queryKey: ['github-history', currentProject?.id] })
       queryClient.invalidateQueries({ queryKey: ['github-status'] })
       if (data.prUrl) {
@@ -112,17 +109,34 @@ function GitHubSection({ onClose }: { onClose?: () => void }) {
         </div>
       </div>
 
-      <div className="space-y-2">
-        <div>
-          <p className="text-[10px] text-editor-muted mb-1">Import from GitHub</p>
-          <input
-            value={githubToken}
-            onChange={(e) => setGithubToken(e.target.value)}
-            placeholder="GitHub token (repo access for private repos / push)"
-            className="input w-full text-[11px] mb-1"
-            type="password"
-          />
-          <div className="flex gap-1">
+      <div className="space-y-3">
+        {!githubStatusQuery.data?.connected && (
+          <div className="px-2">
+            <button
+              className="w-full bg-[#24292e] hover:bg-[#2f363d] text-white text-[11px] py-2 rounded flex items-center justify-center gap-2 font-medium transition-colors border border-[rgba(255,255,255,0.1)]"
+              onClick={async () => {
+                try {
+                  const { url } = await githubApi.oauthUrl()
+                  window.location.href = url
+                } catch (err: any) {
+                  alert(err.response?.data?.error || 'Failed to start GitHub OAuth')
+                }
+              }}
+            >
+              <Github size={14} />
+              Connect with GitHub
+            </button>
+            <p className="text-[9px] text-editor-muted mt-2 text-center leading-tight">
+              Connect to securely clone private repos and push PRs without exposing tokens.
+            </p>
+          </div>
+        )}
+
+        {/* IMPORT SECTION */}
+        <div className="rounded border border-editor-border bg-editor-surface p-2 mx-1">
+          <p className="text-[10px] font-medium text-editor-text mb-2 flex items-center gap-1.5"><Download size={12}/> Clone & Import</p>
+          
+          <div className="flex gap-1 mb-2">
             <input
               value={githubUrl}
               onChange={(e) => setGithubUrl(e.target.value)}
@@ -130,19 +144,24 @@ function GitHubSection({ onClose }: { onClose?: () => void }) {
               className="input flex-1 text-[11px]"
             />
             <button
-              className="btn-ghost text-[10px] px-2"
-              onClick={() => importMutation.mutate()}
+              className="btn-ghost text-[10px] px-2 bg-editor-bg"
+              onClick={() => {
+                if (window.confirm('This will merge the GitHub repository with your current workspace files. Proceed?')) {
+                  importMutation.mutate()
+                }
+              }}
               disabled={!githubUrl.trim() || importMutation.isPending || !canWrite}
               title={canWrite ? 'Import' : 'No write permission'}
             >
-              {importMutation.isPending ? <RefreshCw size={12} className="animate-spin" /> : <Download size={12} />}
+              {importMutation.isPending ? <RefreshCw size={12} className="animate-spin" /> : 'Import'}
             </button>
           </div>
+          
           {branchesQuery.data?.length ? (
             <select
               value={branch}
               onChange={(e) => setBranch(e.target.value)}
-              className="input w-full text-[11px] mt-1"
+              className="input w-full text-[11px]"
             >
               {branchesQuery.data.map((branchName: string) => (
                 <option key={branchName} value={branchName}>
@@ -154,8 +173,8 @@ function GitHubSection({ onClose }: { onClose?: () => void }) {
             <input
               value={branch}
               onChange={(e) => setBranch(e.target.value)}
-              placeholder="Branch to import from / base PR branch"
-              className="input w-full text-[11px] mt-1"
+              placeholder="Branch (e.g. main)"
+              className="input w-full text-[11px]"
             />
           )}
         </div>
@@ -166,38 +185,57 @@ function GitHubSection({ onClose }: { onClose?: () => void }) {
           </div>
         )}
 
+        {/* PUSH SECTION */}
         {canWrite && (
-          <div className="space-y-1">
-            <input
-              value={pushBranchName}
-              onChange={(e) => setPushBranchName(e.target.value)}
-              placeholder="Feature branch label"
-              className="input w-full text-[11px]"
-            />
-            <input
-              value={commitMessage}
-              onChange={(e) => setCommitMessage(e.target.value)}
-              placeholder="Optional commit message"
-              className="input w-full text-[11px]"
-            />
-            <button
-              className="w-full flex items-center justify-center gap-1 py-1.5 bg-editor-bg border border-editor-border rounded text-[10px] text-editor-muted hover:text-editor-text hover:border-editor-accent transition-colors"
-              onClick={() => pushMutation.mutate()}
-              disabled={pushLoading || !canWrite || !githubToken.trim()}
-            >
-              {pushLoading ? (
-                <RefreshCw size={12} className="animate-spin" />
-              ) : (
-                <Upload size={12} />
-              )}
-              Push to GitHub
-            </button>
+          <div className="rounded border border-editor-border bg-editor-surface p-2 mx-1">
+            <p className="text-[10px] font-medium text-editor-text mb-2 flex items-center gap-1.5"><Upload size={12}/> Push to GitHub</p>
+            <div className="space-y-2">
+              <input
+                value={pushBranchName}
+                onChange={(e) => setPushBranchName(e.target.value)}
+                placeholder="Branch name (e.g. feature-update)"
+                className="input w-full text-[11px]"
+              />
+              <input
+                value={commitMessage}
+                onChange={(e) => setCommitMessage(e.target.value)}
+                placeholder="Commit message"
+                className="input w-full text-[11px]"
+              />
+              <button
+                className={`w-full flex items-center justify-center gap-1.5 py-1.5 bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 hover:text-blue-300 border border-blue-500/20 rounded text-[10px] font-medium transition-colors ${!githubStatusQuery.data?.connected ? 'opacity-70' : ''}`}
+                onClick={() => {
+                  if (!githubStatusQuery.data?.connected) {
+                    alert('Please connect your GitHub account first by clicking "Connect with GitHub".')
+                    return
+                  }
+                  pushMutation.mutate()
+                }}
+                disabled={pushLoading || !canWrite}
+              >
+                {pushLoading ? (
+                  <RefreshCw size={12} className="animate-spin" />
+                ) : (
+                  <Upload size={12} />
+                )}
+                Push and Create PR
+              </button>
+            </div>
+            
+            <div className="mt-3 rounded border border-blue-500/20 bg-blue-500/5 p-2 text-[10px] text-blue-300/80">
+              <p className="font-semibold text-blue-300 flex items-center gap-1 mb-1">💡 Prefer the terminal?</p>
+              <p className="mb-1 leading-tight">You can raise PRs directly using the built-in GitHub CLI:</p>
+              <code className="block bg-black/40 px-1.5 py-1 rounded text-editor-text mb-1 select-all">gh auth login</code>
+              <code className="block bg-black/40 px-1.5 py-1 rounded text-editor-text select-all">gh pr create</code>
+            </div>
           </div>
         )}
 
-        <p className="text-[9px] text-editor-muted">
-          Import clones the selected branch into this workspace. Push always creates a new <span className="font-mono">cloudlab/...</span> branch and opens a GitHub PR.
-        </p>
+        <div className="px-2">
+          <p className="text-[9px] text-editor-muted leading-tight">
+            <strong className="text-editor-text">Import</strong> replaces workspace files with GitHub's branch. <strong className="text-editor-text">Push</strong> commits changes to a new branch and opens a PR.
+          </p>
+        </div>
 
         {!!historyQuery.data?.length && (
           <div className="pt-2">
@@ -464,7 +502,7 @@ export function GitPanel() {
   if (activeSidebarPanel !== 'git') return null
 
   return (
-    <div className="w-80 bg-editor-surface border-r border-editor-border flex flex-col shrink-0 overflow-hidden">
+    <div className="flex-1 w-full flex flex-col overflow-hidden">
       <div className="flex items-center justify-between px-3 py-2 border-b border-editor-border">
         <span className="text-[10px] font-semibold text-editor-muted uppercase tracking-widest">
           CloudLab PRs

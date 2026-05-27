@@ -120,30 +120,47 @@ export function registerSocketHandlers(io: Server) {
           terminalProjects.delete(termKey)
         }
 
-        const shell = process.platform === 'win32' ? 'cmd.exe' : 'bash'
-        const shellArgs = process.platform === 'win32' ? [] : ['-l']
         const projectCwd = path.resolve(access.project.storagePath)
-        const sharedBinPath = path.resolve(process.cwd(), '..', 'node_modules', '.bin')
-        const basePathSegments = [
-          sharedBinPath,
-          nodeBinDir,
-          pythonBinDir,
-          process.env.PATH || '',
-        ].filter(Boolean)
-        const term = pty.spawn(shell, shellArgs, {
+        
+        const dbUser = await prisma.user.findUnique({
+          where: { id: user.userId },
+          select: { name: true },
+        })
+        const username = dbUser?.name?.replace(/\s+/g, '').toLowerCase() || 'user'
+        const projectName = access.project.name?.replace(/\s+/g, '-').toLowerCase() || 'project'
+        
+        const initScript = `cat << 'EOF' > /tmp/.ashrc
+rm() {
+  for arg in "$@"; do
+    if [ "$arg" = "/" ] || [ "$arg" = "/workspace" ] || [ "$arg" = "." ] || [ "$arg" = ".." ]; then
+      echo "rm: cannot remove '$arg': Permission denied (CloudLab protection)"
+      return 1
+    fi
+  done
+  /bin/rm "$@"
+}
+PS1="\\033[1;32m${username}@${projectName}\\033[0m:\\033[1;34m\\w\\033[0m\\$ "
+EOF
+if ! command -v git >/dev/null 2>&1; then
+  echo -e "\\033[1;34mInstalling git & gh cli...\\033[0m"
+  apk add --no-cache git github-cli >/dev/null 2>&1
+fi
+ENV=/tmp/.ashrc ash`
+
+        // Use Docker CLI to run an ephemeral container for the terminal
+        // Mounts the project directory to /workspace and uses Alpine Linux
+        const term = pty.spawn('docker', [
+          'run', '-it', '--rm',
+          '-v', `${projectCwd}:/workspace`,
+          '-w', '/workspace',
+          'node:20-alpine',
+          'sh', '-c', initScript
+        ], {
           name: 'xterm-color',
           cols: 80,
           rows: 24,
           cwd: projectCwd,
-          env: {
-            ...process.env,
-            TERM: 'xterm-color',
-            SHELL: shell,
-            LANG: process.env.LANG || 'en_US.UTF-8',
-            PROJECT_ID: projectId,
-            PROJECT_PATH: projectCwd,
-            PATH: basePathSegments.join(':'),
-          },
+          env: process.env, // Env is passed to docker CLI, not inside container. Container env can be passed via -e if needed.
         })
 
         let buffer = ''

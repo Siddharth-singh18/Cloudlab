@@ -4,6 +4,7 @@ import os from 'os'
 import path from 'path'
 import simpleGit from 'simple-git'
 import { PrismaClient } from '@prisma/client'
+import jwt from 'jsonwebtoken'
 import { requireAuth, AuthRequest } from '../middleware/auth'
 import { AppError } from '../middleware/error'
 import { requireProjectAccess } from '../lib/projectAccess'
@@ -300,29 +301,31 @@ router.post('/import', requireAuth, async (req: AuthRequest, res: Response) => {
   const token = githubToken?.trim() || (await getStoredGitHubToken(req.user!.userId))
   await persistGitHubToken(req.user!.userId, githubToken)
 
-  const access = await requireProjectAccess(prisma, projectId, req.user!.userId, 'canWrite')
   const repoUrl = normalizeRepoUrl(githubUrl)
   const authedRepoUrl = withGitHubToken(repoUrl, token)
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'cloudlab-import-'))
   const branchName = branch?.trim() || 'main'
-  const git = simpleGit()
 
   try {
-    await git.clone(authedRepoUrl, tempDir, ['--branch', branchName, '--single-branch'])
-    await emptyDirectory(access.project.storagePath)
-    await copyDirectory(tempDir, access.project.storagePath)
+    const { git } = await ensureRepo(projectId, req.user!.userId)
 
-    const importedGit = simpleGit(access.project.storagePath)
-    await importedGit.remote(['set-url', 'origin', authedRepoUrl]).catch(async () => {
-      await importedGit.addRemote('origin', authedRepoUrl)
+    await git.remote(['set-url', 'origin', authedRepoUrl]).catch(async () => {
+      await git.addRemote('origin', authedRepoUrl)
     })
+
+    // Commit any existing workspace files to prevent pull aborts due to uncommitted changes
+    await git.add('.')
+    await git.commit('Checkpoint before import').catch(() => null)
+
+    // Pull changes from the remote branch, allowing merge with existing unrelated files
+    // -X theirs automatically resolves conflicts by preferring incoming GitHub code
+    await git.pull('origin', branchName, ['--allow-unrelated-histories', '--no-rebase', '-X', 'theirs'])
 
     await prisma.activityEvent.create({
       data: {
         type: 'EDIT',
         userId: req.user!.userId,
         projectId,
-        description: `GitHub import completed from ${repoUrl} (${branchName})`,
+        description: `GitHub code merged from ${repoUrl} (${branchName})`,
       },
     }).catch(() => null)
 
@@ -330,12 +333,10 @@ router.post('/import', requireAuth, async (req: AuthRequest, res: Response) => {
       ok: true,
       repoUrl,
       branch: branchName,
-      message: 'Repository imported successfully.',
+      message: 'Repository merged successfully.',
     })
   } catch (error: any) {
-    throw new AppError(error?.message || 'GitHub import failed', 500)
-  } finally {
-    await fs.rm(tempDir, { recursive: true, force: true }).catch(() => null)
+    throw new AppError(error?.message || 'GitHub import/merge failed', 500)
   }
 })
 
@@ -436,6 +437,60 @@ router.post('/push', requireAuth, async (req: AuthRequest, res: Response) => {
     prUrl: pullRequest.html_url,
     repoUrl: normalizedRepoUrl,
   })
+})
+
+router.get('/oauth-url', requireAuth, (req: AuthRequest, res: Response) => {
+  const clientId = process.env.GITHUB_CLIENT_ID
+  if (!clientId) throw new AppError('GitHub OAuth is not configured on the server', 500)
+
+  const stateToken = jwt.sign(
+    { userId: req.user!.userId, intent: 'github_oauth' },
+    process.env.JWT_SECRET || 'dev-secret',
+    { expiresIn: '15m' }
+  )
+
+  const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&state=${stateToken}&scope=repo,user`
+  return res.json({ url })
+})
+
+router.get('/callback', async (req: any, res: Response) => {
+  const { code, state } = req.query
+  const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173'
+
+  if (!code || !state) {
+    return res.redirect(`${clientUrl}?github_error=missing_params`)
+  }
+
+  try {
+    const decoded = jwt.verify(state as string, process.env.JWT_SECRET || 'dev-secret') as any
+    if (decoded.intent !== 'github_oauth' || !decoded.userId) {
+      throw new Error('Invalid state token')
+    }
+
+    const tokenResponse = await fetch('https://github.com/login/oauth/access_token', {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        client_id: process.env.GITHUB_CLIENT_ID,
+        client_secret: process.env.GITHUB_CLIENT_SECRET,
+        code: code as string
+      })
+    })
+
+    const tokenData = (await tokenResponse.json()) as any
+    if (!tokenData.access_token) {
+      throw new Error(tokenData.error_description || 'No access token returned from GitHub')
+    }
+
+    await persistGitHubToken(decoded.userId, tokenData.access_token)
+    return res.redirect(`${clientUrl}?github_connected=true`)
+  } catch (error: any) {
+    console.error('GitHub OAuth Callback Error:', error)
+    return res.redirect(`${clientUrl}?github_error=${encodeURIComponent(error.message)}`)
+  }
 })
 
 export { router as githubRouter }

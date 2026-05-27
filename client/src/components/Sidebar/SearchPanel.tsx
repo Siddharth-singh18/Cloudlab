@@ -92,7 +92,7 @@ export function SearchPanel() {
   }
 
   return (
-    <div className="w-64 bg-editor-surface border-r border-editor-border flex flex-col shrink-0 overflow-hidden">
+    <div className="flex-1 w-full flex flex-col overflow-hidden">
       {/* Header */}
       <div className="px-3 py-2 border-b border-editor-border">
         <div className="flex items-center justify-between mb-2">

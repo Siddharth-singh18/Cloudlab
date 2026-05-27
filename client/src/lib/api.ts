@@ -40,6 +40,8 @@ export const projectsApi = {
     api.post('/projects', data).then((r) => r.data),
   delete: (id: string) => api.delete(`/projects/${id}`).then((r) => r.data),
   clone: (id: string) => api.post(`/projects/${id}/clone`).then((r) => r.data),
+  getInviteToken: (id: string) => api.get(`/projects/${id}/invite`).then((r) => r.data),
+  joinWithToken: (token: string) => api.post(`/projects/join/${token}`).then((r) => r.data),
 }
 
 // ─── Files ────────────────────────────────────────────────────────────────────
@@ -182,23 +184,23 @@ export const versionsApi = {
 
 // ─── GitHub ─────────────────────────────────────────────────────────────────
 export const githubApi = {
-  import: (projectId: string, repoUrl: string, branch?: string, githubToken?: string) =>
-    api.post('/github/import', { projectId, githubUrl: repoUrl, branch, githubToken }).then((r) => r.data),
+  import: (projectId: string, repoUrl: string, branch?: string) =>
+    api.post('/github/import', { projectId, githubUrl: repoUrl, branch }).then((r) => r.data),
   push: (
     projectId: string,
     branchName?: string,
     commitMessage?: string,
     githubUrl?: string,
-    githubToken?: string,
     baseBranch?: string
   ) =>
-    api.post('/github/push', { projectId, branchName, commitMessage, githubUrl, githubToken, baseBranch }).then((r) => r.data),
+    api.post('/github/push', { projectId, branchName, commitMessage, githubUrl, baseBranch }).then((r) => r.data),
   status: () => api.get('/github/status').then((r) => r.data),
-  branches: (repoUrl: string, githubToken?: string) =>
-    api.post('/github/branches', { githubUrl: repoUrl, githubToken }).then((r) => r.data),
+  branches: (repoUrl: string) =>
+    api.post('/github/branches', { githubUrl: repoUrl }).then((r) => r.data),
   history: (projectId: string) =>
     api.get('/github/history', { params: { projectId } }).then((r) => r.data),
   repos: () => api.get('/github/repos').then((r) => r.data),
+  oauthUrl: () => api.get('/github/oauth-url').then((r) => r.data),
 }
 
 // ─── Notifications ───────────────────────────────────────────────────────────

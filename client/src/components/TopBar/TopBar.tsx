@@ -1,14 +1,15 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
+import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   GitBranch, Eye, Code2, GitMerge, Zap, ChevronDown,
   Settings, ExternalLink, Bell, X, Check, MessageSquare,
-  GitPullRequest, UserPlus, Clock
+  GitPullRequest, UserPlus, Clock, LogOut
 } from 'lucide-react'
 import { useStore } from '../../store'
 import { useShallow } from 'zustand/react/shallow'
 import { shortName, timeAgo } from '../../lib/utils'
-import { notificationsApi } from '../../lib/api'
+import { notificationsApi, authApi } from '../../lib/api'
 
 const USER_COLORS: Record<string, string> = {
   'user-rahul': '#f85149',
@@ -31,7 +32,19 @@ export function TopBar() {
   })))
   const [showMergeModal, setShowMergeModal] = useState(false)
   const [showNotifications, setShowNotifications] = useState(false)
+  const [showProfileMenu, setShowProfileMenu] = useState(false)
+  const profileMenuRef = useRef<HTMLDivElement>(null)
   const queryClient = useQueryClient()
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
+        setShowProfileMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   const { data: notifications = [] } = useQuery({
     queryKey: ['notifications'],
@@ -64,18 +77,29 @@ export function TopBar() {
   const onlineCount = presences.length + 1
   const canMerge = currentProject?.permissions?.canMerge ?? true
 
+  const handleLogout = async () => {
+    try {
+      await authApi.logout()
+    } catch (e) {
+      console.error(e)
+    } finally {
+      localStorage.removeItem('token')
+      window.location.href = '/login'
+    }
+  }
+
   return (
     <div className="h-10 bg-editor-surface border-b border-editor-border flex items-center justify-between px-3 gap-3 shrink-0 z-10 w-full overflow-x-auto no-scrollbar">
       <div className="flex items-center gap-2 shrink-0">
         <button onClick={() => setMobileActivePanel('sidebar')} className="md:hidden text-editor-muted hover:text-white p-1">
            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
         </button>
-        <div className="flex items-center gap-1.5 mr-1 shrink-0">
+        <Link to="/projects" className="flex items-center gap-1.5 mr-1 shrink-0 hover:opacity-80 transition-opacity">
           <div className="w-5 h-5 bg-editor-accent rounded flex items-center justify-center">
             <Zap size={12} className="text-editor-bg" />
           </div>
           <span className="text-xs font-semibold text-editor-text">CloudLab</span>
-        </div>
+        </Link>
 
         {currentProject && (
           <div className="flex items-center gap-2 text-[11px] text-editor-muted min-w-0">
@@ -127,15 +151,34 @@ export function TopBar() {
             <span className="w-1.5 h-1.5 rounded-full bg-editor-green animate-pulse_dot" />
             Live · {onlineCount} online
           </span>
-          <div className="flex items-center">
+          <div className="flex items-center relative" ref={profileMenuRef}>
             {/* Current user avatar */}
             {currentUser && (
               <div
-                className="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-medium border-2 border-editor-surface"
+                onClick={() => setShowProfileMenu(!showProfileMenu)}
+                className="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-medium border-2 border-editor-surface cursor-pointer hover:ring-1 hover:ring-editor-border transition-all"
                 style={{ backgroundColor: currentUser.color + '30', color: currentUser.color, marginLeft: '-4px' }}
                 title={currentUser.name}
               >
                 {shortName(currentUser.name)}
+              </div>
+            )}
+            
+            {showProfileMenu && currentUser && (
+              <div className="absolute right-0 top-full mt-2 w-48 bg-editor-surface border border-editor-border rounded-lg shadow-2xl z-50 flex flex-col animate-fade_in">
+                <div className="px-3 py-2 border-b border-editor-border">
+                  <div className="text-xs font-semibold text-editor-text truncate">{currentUser.name}</div>
+                  <div className="text-[10px] text-editor-muted truncate">{currentUser.email}</div>
+                </div>
+                <div className="py-1">
+                  <button
+                    onClick={handleLogout}
+                    className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-red-400 hover:bg-white/5 transition-colors text-left"
+                  >
+                    <LogOut size={12} />
+                    Log out
+                  </button>
+                </div>
               </div>
             )}
             {presences.slice(0, 3).map((p) => (
