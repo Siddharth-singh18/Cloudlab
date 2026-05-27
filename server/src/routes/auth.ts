@@ -16,60 +16,72 @@ function signToken(userId: string, email: string) {
 }
 
 // POST /api/auth/register
-router.post('/register', async (req: Request, res: Response) => {
-  const schema = z.object({
-    name:     z.string().min(2).max(50),
-    email:    z.string().email(),
-    password: z.string().min(8),
-  })
+router.post('/register', async (req: Request, res: Response, next) => {
+  try {
+    const schema = z.object({
+      name:     z.string().min(2).max(50),
+      email:    z.string().email(),
+      password: z.string().min(8),
+    })
 
-  const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message })
+    const parsed = schema.safeParse(req.body)
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message })
 
-  const { name, email, password } = parsed.data
-  const existing = await prisma.user.findUnique({ where: { email } })
-  if (existing) return res.status(409).json({ error: 'Email already registered' })
+    const { name, email, password } = parsed.data
+    const existing = await prisma.user.findUnique({ where: { email } })
+    if (existing) return res.status(409).json({ error: 'Email already registered' })
 
-  const passwordHash = await bcrypt.hash(password, 12)
-  const user = await prisma.user.create({
-    data: { name, email, passwordHash },
-    select: { id: true, name: true, email: true, avatar: true, color: true },
-  })
+    const passwordHash = await bcrypt.hash(password, 12)
+    const user = await prisma.user.create({
+      data: { name, email, passwordHash },
+      select: { id: true, name: true, email: true, avatar: true, color: true },
+    })
 
-  const token = signToken(user.id, user.email)
-  return res.status(201).json({ token, user })
+    const token = signToken(user.id, user.email)
+    return res.status(201).json({ token, user })
+  } catch (err) {
+    next(err)
+  }
 })
 
 // POST /api/auth/login
-router.post('/login', async (req: Request, res: Response) => {
-  const schema = z.object({
-    email:    z.string().email(),
-    password: z.string(),
-  })
+router.post('/login', async (req: Request, res: Response, next) => {
+  try {
+    const schema = z.object({
+      email:    z.string().email(),
+      password: z.string(),
+    })
 
-  const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return res.status(400).json({ error: 'Invalid input' })
+    const parsed = schema.safeParse(req.body)
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid input' })
 
-  const { email, password } = parsed.data
-  const user = await prisma.user.findUnique({ where: { email } })
-  if (!user) return res.status(401).json({ error: 'Invalid credentials' })
+    const { email, password } = parsed.data
+    const user = await prisma.user.findUnique({ where: { email } })
+    if (!user) return res.status(401).json({ error: 'Invalid credentials' })
 
-  const valid = await bcrypt.compare(password, user.passwordHash)
-  if (!valid) return res.status(401).json({ error: 'Invalid credentials' })
+    const valid = await bcrypt.compare(password, user.passwordHash)
+    if (!valid) return res.status(401).json({ error: 'Invalid credentials' })
 
-  const token = signToken(user.id, user.email)
-  const { passwordHash: _, ...safeUser } = user
-  return res.json({ token, user: safeUser })
+    const token = signToken(user.id, user.email)
+    const { passwordHash: _, ...safeUser } = user
+    return res.json({ token, user: safeUser })
+  } catch (err) {
+    next(err)
+  }
 })
 
 // GET /api/auth/me
-router.get('/me', requireAuth, async (req: AuthRequest, res: Response) => {
-  const user = await prisma.user.findUnique({
-    where: { id: req.user!.userId },
-    select: { id: true, name: true, email: true, avatar: true, color: true, createdAt: true },
-  })
-  if (!user) return res.status(404).json({ error: 'User not found' })
-  return res.json(user)
+router.get('/me', requireAuth, async (req: AuthRequest, res: Response, next) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user!.userId },
+      select: { id: true, name: true, email: true, avatar: true, color: true, createdAt: true },
+    })
+    if (!user) return res.status(404).json({ error: 'User not found' })
+    return res.json(user)
+  } catch (err) {
+    next(err)
+  }
 })
 
 // POST /api/auth/logout
@@ -79,21 +91,25 @@ router.post('/logout', (_req, res) => {
 })
 
 // POST /api/auth/avatar
-router.post('/avatar', requireAuth, async (req: AuthRequest, res: Response) => {
-  const schema = z.object({
-    avatar: z.string().url().or(z.string().startsWith('data:image/')),
-  })
+router.post('/avatar', requireAuth, async (req: AuthRequest, res: Response, next) => {
+  try {
+    const schema = z.object({
+      avatar: z.string().url().or(z.string().startsWith('data:image/')),
+    })
 
-  const parsed = schema.safeParse(req.body)
-  if (!parsed.success) return res.status(400).json({ error: 'Invalid image data' })
+    const parsed = schema.safeParse(req.body)
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid image data' })
 
-  const user = await prisma.user.update({
-    where: { id: req.user!.userId },
-    data: { avatar: parsed.data.avatar },
-    select: { id: true, name: true, email: true, avatar: true, color: true, createdAt: true },
-  })
+    const user = await prisma.user.update({
+      where: { id: req.user!.userId },
+      data: { avatar: parsed.data.avatar },
+      select: { id: true, name: true, email: true, avatar: true, color: true, createdAt: true },
+    })
 
-  return res.json(user)
+    return res.json(user)
+  } catch (err) {
+    next(err)
+  }
 })
 
 export { router as authRouter }
