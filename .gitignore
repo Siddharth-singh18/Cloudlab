@@ -1,5 +1,4 @@
 node_modules/
-<<<<<<< HEAD
 dist/
 .env
 .env.*
@@ -29,8 +28,3 @@ client/storage/
 *.pfx
 .idea/
 .vscode/
-=======
-.env
-dist/
-.DS_Store
->>>>>>> aa256b095ce44a5405353576ca7653dbe567435f
