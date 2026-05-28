@@ -129,7 +129,11 @@ export function registerSocketHandlers(io: Server) {
         const username = dbUser?.name?.replace(/\s+/g, '').toLowerCase() || 'user'
         const projectName = access.project.name?.replace(/\s+/g, '-').toLowerCase() || 'project'
         
-        const initScript = `cat << 'EOF' > /tmp/.ashrc
+        const useDocker = process.env.USE_DOCKER_TERMINAL === 'true'
+        let term: ReturnType<typeof pty.spawn>;
+
+        if (useDocker) {
+          const initScript = `cat << 'EOF' > /tmp/.ashrc
 rm() {
   for arg in "$@"; do
     if [ "$arg" = "/" ] || [ "$arg" = "/workspace" ] || [ "$arg" = "." ] || [ "$arg" = ".." ]; then
@@ -147,21 +151,29 @@ if ! command -v git >/dev/null 2>&1; then
 fi
 ENV=/tmp/.ashrc ash`
 
-        // Use Docker CLI to run an ephemeral container for the terminal
-        // Mounts the project directory to /workspace and uses Alpine Linux
-        const term = pty.spawn('docker', [
-          'run', '-it', '--rm',
-          '-v', `${projectCwd}:/workspace`,
-          '-w', '/workspace',
-          'node:20-alpine',
-          'sh', '-c', initScript
-        ], {
-          name: 'xterm-color',
-          cols: 80,
-          rows: 24,
-          cwd: projectCwd,
-          env: process.env, // Env is passed to docker CLI, not inside container. Container env can be passed via -e if needed.
-        })
+          term = pty.spawn('docker', [
+            'run', '-it', '--rm',
+            '-v', `${projectCwd}:/workspace`,
+            '-w', '/workspace',
+            'node:20-alpine',
+            'sh', '-c', initScript
+          ], {
+            name: 'xterm-color',
+            cols: 80,
+            rows: 24,
+            cwd: projectCwd,
+            env: process.env,
+          })
+        } else {
+          const shell = process.platform === 'win32' ? 'cmd.exe' : 'bash'
+          term = pty.spawn(shell, [], {
+            name: 'xterm-color',
+            cols: 80,
+            rows: 24,
+            cwd: projectCwd,
+            env: { ...process.env, PS1: `\\033[1;32m${username}@${projectName}\\033[0m:\\033[1;34m\\w\\033[0m\\$ ` } as any,
+          })
+        }
 
         let buffer = ''
         let bufferTimeout: NodeJS.Timeout | null = null
