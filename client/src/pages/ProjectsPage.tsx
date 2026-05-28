@@ -24,7 +24,18 @@ function AvatarDropdown() {
   })))
   const [open, setOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -44,28 +55,34 @@ function AvatarDropdown() {
   }
 
   const handleLogout = async () => {
-    await authApi.logout()
-    resetWorkspaceState()
-    setCurrentUser(null)
-    navigate('/')
+    try {
+      await authApi.logout()
+    } catch (e) {
+      console.error(e)
+    } finally {
+      localStorage.removeItem('token')
+      resetWorkspaceState()
+      setCurrentUser(null)
+      navigate('/login')
+    }
   }
 
   if (!currentUser) return null
 
   return (
-    <div className="relative">
-      <button onClick={() => setOpen(!open)} className="focus:outline-none rounded-full ring-2 ring-transparent hover:ring-blue-500/50 transition-all">
+    <div className="relative" ref={menuRef}>
+      <button onClick={() => setOpen(!open)} className="focus:outline-none rounded-full ring-2 ring-transparent hover:ring-blue-500/50 transition-all flex items-center justify-center">
         {currentUser.avatar ? (
-          <img src={currentUser.avatar} alt="Avatar" className="w-8 h-8 rounded-full border border-white/10 object-cover" />
+          <img src={currentUser.avatar} alt="Avatar" className="w-8 h-8 rounded-full border border-white/10 object-cover pointer-events-none" />
         ) : (
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-xs font-bold text-white border border-white/10">
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-xs font-bold text-white border border-white/10 pointer-events-none">
             {currentUser.name.charAt(0).toUpperCase()}
           </div>
         )}
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-48 bg-[#161b22] border border-white/10 rounded-xl shadow-xl overflow-hidden z-50">
+        <div className="absolute right-0 mt-2 w-48 bg-[#161b22] border border-white/10 rounded-xl shadow-xl overflow-hidden z-50 animate-fade_in">
           <div className="px-4 py-3 border-b border-white/5">
             <div className="text-sm font-medium text-white truncate">{currentUser.name}</div>
             <div className="text-xs text-[#7d8590] truncate">{currentUser.email}</div>
