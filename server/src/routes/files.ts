@@ -15,7 +15,17 @@ async function resolveProjectPath(projectId: string, userId: string): Promise<st
 }
 
 async function buildFileTree(dirPath: string, projectId: string, relativePath = ''): Promise<any[]> {
-  const entries = await fs.readdir(dirPath, { withFileTypes: true })
+  let entries;
+  try {
+    entries = await fs.readdir(dirPath, { withFileTypes: true })
+  } catch (error: any) {
+    if (error.code === 'ENOENT') {
+      await fs.mkdir(dirPath, { recursive: true });
+      entries = [];
+    } else {
+      throw error;
+    }
+  }
   const nodes = []
 
   for (const entry of entries) {
