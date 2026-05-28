@@ -5,7 +5,7 @@
   "type": "commonjs",
   "scripts": {
     "dev": "nodemon --exec ts-node src/index.ts",
-    "build": "tsc && prisma db push --schema=prisma/schema.prisma",
+    "build": "tsc && prisma db push --accept-data-loss --schema=prisma/schema.prisma",
     "start": "node dist/index.js",
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
