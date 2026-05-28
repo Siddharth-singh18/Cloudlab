@@ -106,6 +106,14 @@ export function registerSocketHandlers(io: Server) {
 
       try {
         const access = await requireProjectAccess(prisma, projectId, user.userId, 'canWrite')
+        
+        // Security check: Only allow admin to spawn terminals in this Railway PaaS deployment
+        const adminEmail = process.env.ADMIN_EMAIL || 'sid1@gmail.com'
+        if (user.email !== adminEmail) {
+          socket.emit('terminal:data', { terminalId, data: '\r\n\x1b[1;33m[ 🔒 Public Demo Restricted ]\x1b[0m\r\n\x1b[31mTerminal execution is disabled for guest accounts to protect the server.\x1b[0m\r\n\r\nYou can still clone projects, browse the file tree, and use the real-time code editor!\r\n\r\n$ ' })
+          return
+        }
+
         const existing = terminals.get(termKey)
         const existingProjectId = terminalProjects.get(termKey)
 
