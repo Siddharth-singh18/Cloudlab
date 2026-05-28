@@ -166,7 +166,8 @@ ENV=/tmp/.ashrc ash`
           })
         } else {
           const shell = process.platform === 'win32' ? 'cmd.exe' : 'bash'
-          term = pty.spawn(shell, [], {
+          const args = shell === 'bash' ? ['--norc', '--noprofile'] : []
+          term = pty.spawn(shell, args, {
             name: 'xterm-color',
             cols: 80,
             rows: 24,
