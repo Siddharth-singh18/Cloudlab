@@ -171,7 +171,10 @@ ENV=/tmp/.ashrc ash`
             cols: 80,
             rows: 24,
             cwd: projectCwd,
-            env: { ...process.env, PS1: `\\033[1;32m${username}@${projectName}\\033[0m:\\033[1;34m\\w\\033[0m\\$ ` } as any,
+            env: { 
+              ...process.env, 
+              PS1: `\\[\\033[1;32m\\]${username}@${projectName}\\[\\033[0m\\]:\\[\\033[1;34m\\]\\W\\[\\033[0m\\]\\$ ` 
+            } as any,
           })
         }
 
